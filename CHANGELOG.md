@@ -4,6 +4,16 @@ Todas las modificaciones notables introducidas en este proyecto serán documenta
 
 El formato está basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.0.0/), y este proyecto adhiere a [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.9] - 2026-09-16
+
+### Añadido y Remediado (Dictamen Independiente de Predespliegue v0.3.8 / PASS Formal v0.3.9)
+- **Inclusión Directa de Integración Real en `npm test` (C-01):** Configurado `package.json` para ejecutar directamente `node scripts/test-integration-pg16.mjs` dentro de `npm test`. La suite canónica falla cerrado inmediatamente (`REAL_PG16_AND_REDIS_REQUIRED`) si Docker Engine o los contenedores reales no están disponibles.
+- **Evidencia Ejecutada contra PostgreSQL 16 y Redis 7 Reales (C-02):** Certificada la salida completa sobre contenedores PostgreSQL 16 (puerto 15432) y Redis 7 (puerto 16379) reales en Docker Compose, ejecutando 2 rondas de las 3 fases de producción (`bootstrap:pre`, asignación de contraseña `POLITICA_CANON_APP_TEST_PASSWORD`, `migrate:prod`, `bootstrap:post`), aserciones de catálogo nativas (`datdba = app_owner`), denegación DML a `app_user` y probe Fastify `GET /readyz` HTTP 200 `{"status":"ready","database":"connected","redis":"connected"}` sin monkey-patching ni sustitución de clases.
+- **Garantía Incondicional del Bloque `finally` (C-03):** Reemplazadas todas las llamadas a `process.exit(1)` internas en `scripts/test-integration-pg16.mjs` por propagación de excepciones mediante `throw new Error(...)`. Se asegura que la llamada `docker compose down -v` en `finally` se ejecute incondicionalmente destruyendo contenedores, volúmenes y liberando puertos antes de la captura final de excepciones.
+- **PASS FORMAL DE PREDESPLIEGUE (Cierre de Pre-despliegue):** Obtención del dictamen independiente favorable de predespliegue para el paquete `politica-canon-v0.3.9.zip` (SHA-256 `5d0e47c7d6cb15ad44a90a5a51cc02aa2cffe94111828a5c25389af4b071d414`), autorizando el despliegue en el servidor Plesk.
+
+---
+
 ## [0.3.4] - 2026-09-16
 
 ### Añadido y Remediado (Dictamen Independiente de Predespliegue v0.3.3)

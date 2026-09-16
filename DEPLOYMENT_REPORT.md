@@ -1,11 +1,11 @@
-# Informe de Despliegue y Guía de Aprovisionamiento — Política Canon v0.3.4 (Fase 1 MVP)
+# Informe de Despliegue y Guía de Aprovisionamiento — Política Canon v0.3.6 (Fase 1 MVP)
 
 **Fecha:** 16 de septiembre de 2026  
 **Dominio Target:** `peaceful-johnson.194-164-175-146.plesk.page`  
 **Entorno de Servidor:** Plesk Obsidian 18.0.80 / Ubuntu 24.04.5 LTS  
 **Motor de Aplicación:** Node.js 22.23.2 / Fastify TypeScript Monolith  
 **Motores Canónicos de Persistencia:** PostgreSQL 16.15 / Redis 7.0.15  
-**Estado:** **Fase 1 MVP Remediado 100% y Aprobado para Despliegue v0.3.4**
+**Estado:** **Fase 1 MVP Remediado 100% y Aprobado para Despliegue v0.3.6**
 
 ---
 

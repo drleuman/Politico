@@ -9,7 +9,7 @@ services:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: audit_dev_only_secret_do_not_use_in_prod
     ports:
-      - "5432:5432"
+      - "${POSTGRES_PORT:-15432}:5432"
     volumes:
       - ./db/0000_bootstrap_roles.sql:/docker-entrypoint-initdb.d/00_bootstrap_roles.sql
       - ./db/migrations/0001_initial_schema.sql:/docker-entrypoint-initdb.d/01_initial_schema.sql
@@ -25,7 +25,7 @@ services:
     container_name: politica_canon_redis_audit
     command: redis-server --appendonly yes
     ports:
-      - "6379:6379"
+      - "${REDIS_PORT:-16379}:6379"
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s

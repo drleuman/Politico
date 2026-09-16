@@ -1,5 +1,9 @@
--- Migración DDL Rollback — Política Canon v0.3.12 (Fase 1.1)
--- Reversión de índices y columnas agregadas en 0003
+-- Migración DDL Rollback — Política Canon v0.3.13 (Fase 1.1 Correctiva)
+-- Reversión de funciones SECURITY DEFINER, índices y columnas agregadas en 0003
+
+DROP FUNCTION IF EXISTS resolve_invitation_by_token(CHAR(64));
+DROP FUNCTION IF EXISTS resolve_session_by_token(CHAR(64));
+DROP FUNCTION IF EXISTS get_user_active_memberships(UUID);
 
 DROP INDEX IF EXISTS idx_role_assignments_lookup;
 DROP INDEX IF EXISTS idx_password_reset_tokens_hash;

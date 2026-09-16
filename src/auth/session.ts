@@ -125,10 +125,7 @@ export async function validateSession(
   const sidHash = hashToken(rawToken);
 
   const res = await client.query(
-    `SELECT s.*, u.email, u.full_name, u.is_active AS user_active, u.mfa_enabled, u.created_at AS user_created_at, u.locked_until
-     FROM user_sessions s
-     JOIN users u ON u.id = s.user_id
-     WHERE s.sid_hash = $1 AND s.revoked_at IS NULL AND s.idle_expires_at > NOW() AND s.absolute_expires_at > NOW()`,
+    `SELECT * FROM resolve_session_by_token($1)`,
     [sidHash]
   );
 
@@ -138,8 +135,11 @@ export async function validateSession(
 
   const row = res.rows[0];
 
+  // Configurar la variable de sesión RLS app.current_organization_id para las operaciones subsecuentes
+  await client.query("SELECT set_config('app.current_organization_id', $1, false)", [row.organization_id]);
+
   // Comprobar bloqueo o inactividad del usuario
-  if (!row.user_active) return { session: null, user: null };
+  if (!row.is_active) return { session: null, user: null };
   if (row.locked_until && new Date(row.locked_until) > new Date()) {
     return { session: null, user: null };
   }
@@ -152,14 +152,14 @@ export async function validateSession(
 
   await client.query(
     `UPDATE user_sessions SET idle_expires_at = $1 WHERE id = $2`,
-    [finalIdle.toISOString(), row.id]
+    [finalIdle.toISOString(), row.session_id]
   );
 
   const session: UserSession = {
-    id: row.id,
+    id: row.session_id,
     organizationId: row.organization_id,
     userId: row.user_id,
-    sidHash: row.sid_hash,
+    sidHash: sidHash,
     antiCsrfTokenHash: row.anti_csrf_token_hash,
     ipAddress: row.ip_address,
     userAgent: row.user_agent,
@@ -174,7 +174,7 @@ export async function validateSession(
     id: row.user_id,
     email: row.email,
     fullName: row.full_name,
-    isActive: row.user_active,
+    isActive: row.is_active,
     mfaEnabled: row.mfa_enabled,
     createdAt: row.user_created_at,
   };

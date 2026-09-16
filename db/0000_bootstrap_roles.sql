@@ -43,7 +43,14 @@ BEGIN
         ALTER ROLE audit_dispatcher WITH NOLOGIN NOINHERIT NOSUPERUSER NOCREATEDB NOCREATEROLE BYPASSRLS NOREPLICATION;
     END IF;
 
-    -- 6. Rol de Conexión Runtime Específico del Servidor (politica_canon_app)
+    -- 6. Rol Resolver Acotado de Tokens por Hash (token_resolver — BYPASSRLS)
+    IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'token_resolver') THEN
+        CREATE ROLE token_resolver WITH NOLOGIN NOINHERIT NOSUPERUSER NOCREATEDB NOCREATEROLE BYPASSRLS NOREPLICATION;
+    ELSE
+        ALTER ROLE token_resolver WITH NOLOGIN NOINHERIT NOSUPERUSER NOCREATEDB NOCREATEROLE BYPASSRLS NOREPLICATION;
+    END IF;
+
+    -- 7. Rol de Conexión Runtime Específico del Servidor (politica_canon_app)
     IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'politica_canon_app') THEN
         CREATE ROLE politica_canon_app WITH LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS NOREPLICATION CONNECTION LIMIT 10;
     ELSE
@@ -51,8 +58,10 @@ BEGIN
     END IF;
 END $$;
 
--- Enlazar la identidad de runtime al rol canónico app_user
+-- Enlazar la identidad de runtime al rol canónico app_user y otorgar ADMIN OPTION temporal a app_owner para asignación DDL
 GRANT app_user TO politica_canon_app;
+GRANT token_resolver TO app_owner WITH ADMIN OPTION;
+GRANT USAGE, CREATE ON SCHEMA public TO token_resolver, app_owner, app_user, politica_canon_app;
 
 -- Conceder app_owner a postgres para permitir SET ROLE app_owner en migraciones locales
 DO $$

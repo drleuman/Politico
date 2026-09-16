@@ -32,11 +32,17 @@ export async function createInvitation(
 ): Promise<{ invitationId: string; rawToken: string; expiresAt: string }> {
   const { organizationId, workspaceId = null, email, role, invitedBy, expiresInHours = 48 } = params;
 
+  if (['APPROVER', 'PUBLISHER', 'AUDITOR'].includes(role)) {
+    throw new Error('ROLE_RESTRICTED: No se permite invitar directamente a roles de gobernanza restringidos (APPROVER, PUBLISHER, AUDITOR). Utilice el flujo transaccional de solicitudes.');
+  }
+
   const normalizedEmail = email.trim().toLowerCase();
   const rawToken = generateHighEntropyToken(32);
   const tokenHash = hashToken(rawToken);
 
   const expiresAt = new Date(Date.now() + expiresInHours * 60 * 60 * 1000).toISOString();
+
+  await client.query("SELECT set_config('app.current_organization_id', $1, false)", [organizationId]);
 
   const res = await client.query(
     `INSERT INTO invitations (organization_id, workspace_id, email, role, token_hash, invited_by, expires_at)
@@ -67,6 +73,8 @@ export async function createInvitation(
  * Lista las invitaciones activas de una organización
  */
 export async function listInvitations(client: PoolClient, organizationId: string): Promise<Invitation[]> {
+  await client.query("SELECT set_config('app.current_organization_id', $1, false)", [organizationId]);
+
   const res = await client.query(
     `SELECT id, organization_id, workspace_id, email, role, token_hash, invited_by, expires_at, consumed_at, created_at
      FROM invitations
@@ -97,6 +105,8 @@ export async function revokeInvitation(
   params: { invitationId: string; organizationId: string; revokedBy: string }
 ): Promise<boolean> {
   const { invitationId, organizationId, revokedBy } = params;
+
+  await client.query("SELECT set_config('app.current_organization_id', $1, false)", [organizationId]);
 
   const res = await client.query(
     `UPDATE invitations
@@ -147,9 +157,7 @@ export async function acceptInvitation(
   const tokenHash = hashToken(rawToken);
 
   const invRes = await client.query(
-    `SELECT id, organization_id, workspace_id, email, role, invited_by, expires_at, consumed_at
-     FROM invitations
-     WHERE token_hash = $1`,
+    `SELECT * FROM resolve_invitation_by_token($1)`,
     [tokenHash]
   );
 
@@ -158,6 +166,9 @@ export async function acceptInvitation(
   }
 
   const inv = invRes.rows[0];
+
+  // Configurar variable de sesión RLS app.current_organization_id
+  await client.query("SELECT set_config('app.current_organization_id', $1, false)", [inv.organization_id]);
 
   if (inv.consumed_at) {
     throw new Error('INVITATION_REUSED: La invitación ya ha sido consumida previamente.');
@@ -217,7 +228,7 @@ export async function acceptInvitation(
   );
 
   // Marcar invitación como consumida
-  await client.query(`UPDATE invitations SET consumed_at = NOW() WHERE id = $1`, [inv.id]);
+  await client.query(`UPDATE invitations SET consumed_at = NOW() WHERE id = $1`, [inv.invitation_id || inv.id]);
 
   // Auditoría
   await recordSecurityAuditEvent(client, {
@@ -225,7 +236,7 @@ export async function acceptInvitation(
     actorId: userId,
     eventType: 'INVITATION_ACCEPTED',
     payload: {
-      invitationId: inv.id,
+      invitationId: inv.invitation_id || inv.id,
       email: inv.email,
       role: inv.role,
     },

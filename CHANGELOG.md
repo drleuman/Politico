@@ -4,6 +4,58 @@ Todas las modificaciones notables introducidas en este proyecto serán documenta
 
 El formato está basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.0.0/), y este proyecto adhiere a [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.17] - 2026-09-17
+
+### Remediado y Endurecido (Fase 1.1 Correctiva — Inmutabilidad de Release y Normalización CRLF)
+- **Emisión Canónica Inmutable (`package.json`, `validate_v0.3.17.cjs`):** Incrementada la versión a `0.3.17` tras la incorporación de la normalización CRLF multiplataforma en la verificación estática de hashes históricos.
+- **Normalización CRLF en Validación de Informes Históricos (`validate_v0.3.17.cjs`):** Aplicado `.replace(/\r\n/g, '\n')` previo al cálculo de hash SHA-256 de informes markdown históricos, garantizando determinismo exacto de validación tanto en Windows (CRLF) como en Linux/POSIX (LF).
+- **Pruebas de Clon Limpio (`scripts/test-integration-pg16.mjs`):** Verificación completa del candidato `v0.3.17` desde un clon independiente de la rama candidata.
+
+---
+
+## [0.3.16] - 2026-09-16
+
+### Remediado y Endurecido (Fase 1.1 Correctiva — Alineación de Scripts de Despliegue en package.json)
+- **Alineación Estricta de Scripts de Despliegue (`package.json`):** Eliminados los aliases obsoletos `db:bootstrap` y `db:migrate` (que provocaban `MODULE_NOT_FOUND`) y sustituidos por la convención canónica documentada en `DEPLOYMENT_REPORT.md`: `bootstrap:pre`, `migrate:prod` y `bootstrap:post`.
+- **Verificación Automática de Existencia de Scripts (`validate_v0.3.16.cjs`):** Añadida aserción explícita en la validación estática que verifica la presencia en `package.json` y resolubilidad física en disco de los 3 scripts de despliegue (`bootstrap-pre.mjs`, `migrate-production.mjs`, `bootstrap-post.mjs`).
+- **Sincronización del Banner del Runner de Integración (`scripts/test-integration-pg16.mjs`):** Sincronizadas todas las marcas e impresiones del runner a `v0.3.16`.
+
+---
+
+## [0.3.15] - 2026-09-16
+
+### Remediado y Endurecido (Fase 1.1 Correctiva — Corrección de Propiedad de Funciones Resolver)
+- **Corrección de Propiedad de Funciones Resolver (`db/0002_bootstrap_permissions.sql`, `db/migrations/0004_fase_1_1_token_resolver_fix.sql`):** Excluidas las 3 funciones resolver (`resolve_session_by_token`, `resolve_invitation_by_token`, `get_user_active_memberships`) del bucle genérico que asignaba la propiedad de funciones a `app_owner` en post-bootstrap. Asignada explícitamente la propiedad de las 3 funciones a `token_resolver` (`BYPASSRLS`).
+- **Desacoplamiento Estricto de Permisos y Membresías (`db/0000_bootstrap_roles.sql`, `db/0002_bootstrap_permissions.sql`):** Revocado el permiso `CREATE` en el esquema `public` para `token_resolver`, otorgándole únicamente `USAGE` sobre `public` y `SELECT` sobre las 4 tablas estrictamente necesarias (`user_sessions`, `invitations`, `organization_memberships`, `users`). Revocada la membresía temporal de `app_owner` en `token_resolver` (`REVOKE token_resolver FROM app_owner;`).
+- **Aserción de Catálogo PostgreSQL 16 (`scripts/test-integration-pg16.mjs`):** Verificación autoritativa de que la propiedad de las 3 funciones pertenezca a `token_resolver`, que `token_resolver` no tenga `CREATE` en `public`, y que `app_owner` no sea miembro de `token_resolver` tras las tres fases del bootstrap/migración.
+- **Rollback Completo y Migración Forward-Only (`db/migrations/0003_fase_1_1_identity_rbac_down.sql`, `db/migrations/0004_fase_1_1_token_resolver_fix.sql`):** Agregado `DROP FUNCTION IF EXISTS get_user_active_memberships(UUID);` en el rollback de `0003` y emitida la migración `0004` para compatibilidad forward-only.
+
+---
+
+## [0.3.14] - 2026-09-16
+
+### Remediado y Endurecido (Fase 1.1 Correctiva — Resolutores FORCE RLS y Controles MFA Estrictos)
+- **Rol Resolutor por Hash con BYPASSRLS Acotado (`db/0000_bootstrap_roles.sql`, `db/migrations/0003_fase_1_1_identity_rbac.sql`):** Creado el rol `token_resolver` con `BYPASSRLS` dedicado únicamente a ostentar la propiedad de las funciones `SECURITY DEFINER` de resolución por hash (`resolve_session_by_token`, `resolve_invitation_by_token`, `get_user_active_memberships`). Esto permite resolver tokens por su SHA-256 único bajo `FORCE ROW LEVEL SECURITY` antes de fijar el GUC de organización, manteniendo denegación estricta en el resto de consultas.
+- **MFA Obligatorio y Reciente para Gestión de Invitaciones (`src/auth/routes.ts`):** `POST`, `GET` y `DELETE /api/v1/invitations` verifican estrictamente que `user.mfaEnabled === true` **y** `mfaAgeSeconds <= 900` (frescura <= 15 min / 900s). Rechazo con `403 Forbidden` (`MFA_REQUIRED`) si no está habilitado o está vencido.
+- **Suite Adversarial Completa en Integración Real (`scripts/test-integration-pg16.mjs`):** Aserciones del catálogo PostgreSQL 16 para `token_resolver` `BYPASSRLS`, resolución por hash bajo `FORCE RLS`, rechazo de Admin sin MFA configurado, rechazo de Admin con MFA vencido (>15 min) y éxito únicamente con MFA habilitado y verificado (<15 min).
+
+---
+
+## [0.3.13] - 2026-09-16
+
+### Remediado y Endurecido (Fase 1.1 Correctiva — Endurecimiento de Seguridad)
+- **RLS Estricto sin Fallback (`db/migrations/0003_fase_1_1_identity_rbac.sql`):** Eliminado `OR GUC IS NULL` de todas las políticas RLS en `user_sessions` e `invitations`. Creadas funciones `SECURITY DEFINER` `resolve_session_by_token` y `resolve_invitation_by_token` (propiedad de `app_owner`), con permisos `EXECUTE` concedidos explícitamente a `app_user` y `politica_canon_app`. Al resolver sesión se fija `app.current_organization_id = organization_id` en la conexión.
+- **RBAC/ABAC y Control MFA en Invitaciones (`src/auth/routes.ts`, `src/auth/invitations.ts`):** `POST /api/v1/invitations` verifica que la sesión del llamante posea rol `ADMIN` o `COORDINATOR` en la organización objetivo, posea sesión MFA fresca (<15 minutos), y restringe explícitamente la creación de invitaciones para roles de gobernanza (`APPROVER`, `PUBLISHER`, `AUDITOR`).
+- **Verificación Estricta de Membresía en Login (`src/auth/routes.ts`):** `POST /api/v1/auth/login` valida la existencia de membresía activa en `organization_memberships` antes de generar la sesión (`403 Forbidden` en caso contrario).
+- **Protección de Tokens y Transmisión Exclusiva `HttpOnly` (`src/auth/routes.ts`):** Eliminado el campo `token` de las respuestas JSON de login/mfa (el token se transmite únicamente en la cookie `politica_canon_session` / `sid`). Eliminado `resetToken` de la respuesta JSON de `forgot-password`.
+- **Validación Fail-Closed de Secreto de Sesión/MFA (`src/config/env.ts`):** `SESSION_SECRET` exige mínimo 32 caracteres y rechaza valores por defecto/placeholders en el arranque.
+- **Verificación Anti-CSRF Obligatoria (`src/auth/routes.ts`):** Validación obligatoria de la cabecera `X-CSRF-Token` contra cookie CSRF en todos los endpoints mutables (`POST`, `PUT`, `PATCH`, `DELETE`).
+- **Rate Limit Fail-Closed en Redis (`src/auth/routes.ts`):** Captura de fallos de Redis respondiendo `503 Service Unavailable` (`RATE_LIMIT_SERVICE_UNAVAILABLE`).
+- **Filtro de Expiración en Contexto de Autorización (`src/auth/roles.ts`):** Filtrado de asignaciones y membresías caducadas (`valid_from <= NOW()` y `valid_until > NOW()`).
+- **Enlaces Portables en Documentación Markdown (`validate_v0.3.13.cjs`):** Convertidos todos los enlaces en informes Markdown a rutas relativas portables. Validador `validate_v0.3.13.cjs` verifica ausencia de esquemas `file:///` locales.
+
+---
+
 ## [0.3.12] - 2026-09-16
 
 ### Añadido (Fase 1.1 — Identidad, Invitaciones, Usuarios, Sesiones y RBAC/ABAC)

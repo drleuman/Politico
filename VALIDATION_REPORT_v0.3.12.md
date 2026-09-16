@@ -20,10 +20,10 @@
 
 | Componente | Archivos Principales |
 |---|---|
-| **Base de Datos & Migraciones** | [`db/migrations/0003_fase_1_1_identity_rbac.sql`](file:///f:/politica-canon-v0.1.0/politica-canon-v0.1.0/db/migrations/0003_fase_1_1_identity_rbac.sql), [`db/migrations/0003_fase_1_1_identity_rbac_down.sql`](file:///f:/politica-canon-v0.1.0/politica-canon-v0.1.0/db/migrations/0003_fase_1_1_identity_rbac_down.sql), [`db/0002_bootstrap_permissions.sql`](file:///f:/politica-canon-v0.1.0/politica-canon-v0.1.0/db/0002_bootstrap_permissions.sql) |
-| **Módulos Core de Seguridad** | [`src/auth/crypto.ts`](file:///f:/politica-canon-v0.1.0/politica-canon-v0.1.0/src/auth/crypto.ts), [`src/auth/session.ts`](file:///f:/politica-canon-v0.1.0/politica-canon-v0.1.0/src/auth/session.ts), [`src/auth/invitations.ts`](file:///f:/politica-canon-v0.1.0/politica-canon-v0.1.0/src/auth/invitations.ts), [`src/auth/mfa.ts`](file:///f:/politica-canon-v0.1.0/politica-canon-v0.1.0/src/auth/mfa.ts), [`src/auth/roles.ts`](file:///f:/politica-canon-v0.1.0/politica-canon-v0.1.0/src/auth/roles.ts), [`src/audit/events.ts`](file:///f:/politica-canon-v0.1.0/politica-canon-v0.1.0/src/audit/events.ts) |
-| **Rutas & Servidor Fastify** | [`src/auth/routes.ts`](file:///f:/politica-canon-v0.1.0/politica-canon-v0.1.0/src/auth/routes.ts), [`src/server.ts`](file:///f:/politica-canon-v0.1.0/politica-canon-v0.1.0/src/server.ts) |
-| **Pruebas & Validación** | [`scripts/test-integration-pg16.mjs`](file:///f:/politica-canon-v0.1.0/politica-canon-v0.1.0/scripts/test-integration-pg16.mjs), [`validate_v0.3.12.cjs`](file:///f:/politica-canon-v0.1.0/politica-canon-v0.1.0/validate_v0.3.12.cjs) |
+| **Base de Datos & Migraciones** | [`db/migrations/0003_fase_1_1_identity_rbac.sql`](db/migrations/0003_fase_1_1_identity_rbac.sql), [`db/migrations/0003_fase_1_1_identity_rbac_down.sql`](db/migrations/0003_fase_1_1_identity_rbac_down.sql), [`db/0002_bootstrap_permissions.sql`](db/0002_bootstrap_permissions.sql) |
+| **Módulos Core de Seguridad** | [`src/auth/crypto.ts`](src/auth/crypto.ts), [`src/auth/session.ts`](src/auth/session.ts), [`src/auth/invitations.ts`](src/auth/invitations.ts), [`src/auth/mfa.ts`](src/auth/mfa.ts), [`src/auth/roles.ts`](src/auth/roles.ts), [`src/audit/events.ts`](src/audit/events.ts) |
+| **Rutas & Servidor Fastify** | [`src/auth/routes.ts`](src/auth/routes.ts), [`src/server.ts`](src/server.ts) |
+| **Pruebas & Validación** | [`scripts/test-integration-pg16.mjs`](scripts/test-integration-pg16.mjs), [`validate_v0.3.12.cjs`](validate_v0.3.12.cjs) |
 | **Empaquetado** | `politica-canon-v0.3.12.zip`, `MANIFEST_v0.3.12.json` |
 
 ---

@@ -33,7 +33,10 @@ export async function buildResolvedAuthorizationContext(
   const orgMemsRes = await client.query(
     `SELECT organization_id, is_active, valid_from, valid_until
      FROM organization_memberships
-     WHERE user_id = $1 AND organization_id = $2`,
+     WHERE user_id = $1 AND organization_id = $2 
+       AND is_active = TRUE 
+       AND valid_from <= NOW() 
+       AND (valid_until IS NULL OR valid_until > NOW())`,
     [userId, organizationId]
   );
   const organizationMemberships = orgMemsRes.rows.map(r => ({
@@ -47,7 +50,10 @@ export async function buildResolvedAuthorizationContext(
   const wsMemsRes = await client.query(
     `SELECT organization_id, workspace_id, role, is_active, valid_from, valid_until
      FROM workspace_memberships
-     WHERE user_id = $1 AND organization_id = $2`,
+     WHERE user_id = $1 AND organization_id = $2
+       AND is_active = TRUE 
+       AND valid_from <= NOW() 
+       AND (valid_until IS NULL OR valid_until > NOW())`,
     [userId, organizationId]
   );
   const workspaceMemberships = wsMemsRes.rows.map(r => ({
@@ -64,7 +70,10 @@ export async function buildResolvedAuthorizationContext(
     `SELECT am.organization_id, am.authority_body_id, am.role, am.is_active, am.valid_until, ab.body_type
      FROM authority_memberships am
      JOIN authority_bodies ab ON ab.organization_id = am.organization_id AND ab.id = am.authority_body_id
-     WHERE am.user_id = $1 AND am.organization_id = $2`,
+     WHERE am.user_id = $1 AND am.organization_id = $2
+       AND am.is_active = TRUE 
+       AND am.valid_from <= NOW() 
+       AND (am.valid_until IS NULL OR am.valid_until > NOW())`,
     [userId, organizationId]
   );
   const authorityMemberships = authMemsRes.rows.map(r => ({
@@ -80,7 +89,10 @@ export async function buildResolvedAuthorizationContext(
   const roleAssignRes = await client.query(
     `SELECT id, organization_id, scope_type, scope_id, assigned_role, is_active, valid_from, valid_until
      FROM role_assignments
-     WHERE target_user_id = $1 AND organization_id = $2 AND is_active = TRUE`,
+     WHERE target_user_id = $1 AND organization_id = $2
+       AND is_active = TRUE 
+       AND valid_from <= NOW() 
+       AND (valid_until IS NULL OR valid_until > NOW())`,
     [userId, organizationId]
   );
   const effectiveRoleAssignments: EffectiveRoleAssignment[] = roleAssignRes.rows.map(r => ({

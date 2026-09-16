@@ -36,9 +36,14 @@ sudo mkdir -p /etc/politica-canon
 # 3. Asignar propiedad
 sudo chown -R politica-canon:politica-canon /opt/politica-canon
 
-# 4. Desplegar el código fuente del paquete v0.2.18
-sudo cp -r . /opt/politica-canon/app/
+# 4. Desplegar el código fuente desde el repositorio GitHub (o paquete v0.2.18)
+# Opción A (Recomendada): Clonar desde el repositorio oficial GitHub
+sudo git clone https://github.com/drleuman/Politico.git /opt/politica-canon/app
 sudo chown -R politica-canon:politica-canon /opt/politica-canon/app
+
+# Opción B: Copiar paquete v0.2.18 ZIP
+# sudo cp -r . /opt/politica-canon/app/
+# sudo chown -R politica-canon:politica-canon /opt/politica-canon/app
 
 # 5. Instalar dependencias y compilar monolito
 cd /opt/politica-canon/app

@@ -1,0 +1,10 @@
+﻿{
+    "version":  "0.3.9",
+    "releaseDate":  "2026-09-16",
+    "packageName":  "politica-canon-v0.3.9.zip",
+    "sizeBytes":  409509,
+    "sha256":  "5d0e47c7d6cb15ad44a90a5a51cc02aa2cffe94111828a5c25389af4b071d414",
+    "fileCount":  181,
+    "canonicalDatabaseEngine":  "PostgreSQL 16+",
+    "dictamen":  "PASS (RELEASE V0.3.9 INTEGRACION DIRECTA EN NPM TEST, STRICT FAIL CLOSED Y LIMPIEZA FINALLY ENTORNO PLESK)"
+}

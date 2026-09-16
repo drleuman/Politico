@@ -2,7 +2,7 @@ import { execSync } from 'child_process';
 import pg from 'pg';
 const { Client } = pg;
 
-console.log('=== RUNNER DE INTEGRACIÓN REAL POSTGRESQL 16 & REDIS (v0.3.8 STRICT FAIL-CLOSED) ===\n');
+console.log('=== RUNNER DE INTEGRACIÓN REAL POSTGRESQL 16 & REDIS (v0.3.9 STRICT FAIL-CLOSED) ===\n');
 
 const ADMIN_URL = process.env.POLITICA_CANON_ADMIN_DATABASE_URL || 'postgresql://postgres:audit_dev_only_secret_do_not_use_in_prod@127.0.0.1:15432/politica_canon';
 const MIGRATION_URL = process.env.MIGRATION_DATABASE_URL || ADMIN_URL;
@@ -55,12 +55,10 @@ async function runIntegrationTest() {
   let fastifyApp = null;
 
   try {
-    // C-01: Verificación estricta de Docker (FAIL CLOSED)
+    // C-01 / C-03: Verificación estricta de Docker (FAIL CLOSED con THROW, sin process.exit prematuro)
     const dockerOk = await checkDockerAvailable();
     if (!dockerOk) {
-      console.error('❌ ERROR FATAL (REAL_PG16_AND_REDIS_REQUIRED): Docker Engine no está activo ni disponible.');
-      console.error('   El gate de integración de v0.3.8 exige estrictamente un entorno Docker funcional.');
-      process.exit(1);
+      throw new Error('REAL_PG16_AND_REDIS_REQUIRED: Docker Engine no está activo ni disponible.');
     }
 
     console.log('🐳 Levantando contenedores PostgreSQL 16 y Redis 7 reales en Docker Compose...');
@@ -68,15 +66,13 @@ async function runIntegrationTest() {
       execSync('docker compose -f docker-compose.audit.yml up -d', { stdio: 'inherit' });
       composeStarted = true;
     } catch (composeErr) {
-      console.error('❌ ERROR FATAL (REAL_PG16_AND_REDIS_REQUIRED): Falló docker compose up:', composeErr.message);
-      process.exit(1);
+      throw new Error(`REAL_PG16_AND_REDIS_REQUIRED: Falló docker compose up: ${composeErr.message}`);
     }
 
     console.log('⏳ Esperando disponibilidad de PostgreSQL 16 en 127.0.0.1:15432...');
     const dbReady = await waitForDb(ADMIN_URL);
     if (!dbReady) {
-      console.error('❌ ERROR FATAL (REAL_PG16_AND_REDIS_REQUIRED): PostgreSQL 16 no respondió en 127.0.0.1:15432.');
-      process.exit(1);
+      throw new Error('REAL_PG16_AND_REDIS_REQUIRED: PostgreSQL 16 no respondió en 127.0.0.1:15432.');
     }
     console.log('✅ PostgreSQL 16 en Docker Compose conectado exitosamente.');
 
@@ -169,19 +165,19 @@ async function runIntegrationTest() {
     }
 
     console.log('✅ PROBES HTTP FASTIFY: GET /readyz = 200 {"status":"ready","database":"connected","redis":"connected"} CONFIRMADO EXITOSAMENTE.');
-    console.log('\n🎉 GATE DE INTEGRACIÓN REAL v0.3.8 COMPLETO Y CERTIFICADO');
+    console.log('\n🎉 GATE DE INTEGRACIÓN REAL v0.3.9 COMPLETO Y CERTIFICADO');
 
   } finally {
-    // H-01: Limpieza incondicional de recursos en finally
+    // H-01 / C-03: Limpieza incondicional en bloque finally (SE GARANTIZA SU EJECUCIÓN AL LANZAR THROW EN LUGAR DE PROCESS.EXIT)
     if (fastifyApp) {
       await fastifyApp.close().catch(() => {});
     }
 
     if (composeStarted) {
-      console.log('\n🧹 [H-01 CLEANUP] Destruyendo contenedores y volúmenes de prueba Docker Compose (down -v)...');
+      console.log('\n🧹 [H-01/C-03 FINALLY CLEANUP] Destruyendo contenedores y volúmenes de prueba Docker Compose (down -v)...');
       try {
         execSync('docker compose -f docker-compose.audit.yml down -v', { stdio: 'inherit' });
-        console.log('✅ [H-01 CLEANUP] Recursos Docker destruidos incondicionalmente.');
+        console.log('✅ [H-01/C-03 FINALLY CLEANUP] Recursos Docker destruidos incondicionalmente en finally.');
       } catch (downErr) {
         console.warn('⚠️ Error al destruir contenedores Docker:', downErr.message);
       }

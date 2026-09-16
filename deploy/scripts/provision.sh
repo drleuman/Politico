@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# Script de Provisión Inicial de Servidor — Política Canon v0.3.8
+# Script de Provisión Inicial de Servidor — Política Canon v0.3.9
 # Ejecutar en el servidor Ubuntu 24.04 / Plesk como root o con sudo
 
 set -euo pipefail
 
-echo "== [POLÍTICA CANON v0.3.8] Provisión Inicial de Servidor =="
+echo "== [POLÍTICA CANON v0.3.9] Provisión Inicial de Servidor =="
 
 # 1. Crear usuario del sistema sin shell interactiva
 if ! id -u politica-canon >/dev/null 2>&1; then
@@ -43,7 +43,7 @@ if [ ! -f /etc/politica-canon/runtime.env ]; then
     RANDOM_SECRET=$(openssl rand -hex 32 || head -c 64 /dev/urandom | xxd -p | tr -d '\n')
     
     cat <<EOF > /etc/politica-canon/runtime.env
-# Configuración de tiempo de ejecución Política Canon v0.3.8
+# Configuración de tiempo de ejecución Política Canon v0.3.9
 NODE_ENV=production
 PORT=3000
 HOST=127.0.0.1
@@ -63,4 +63,4 @@ if [ -f /opt/politica-canon/app/deploy/systemd/politica-canon.service ]; then
     systemctl enable politica-canon
 fi
 
-echo "== [POLÍTICA CANON v0.3.8] Provisión completada exitosamente =="
+echo "== [POLÍTICA CANON v0.3.9] Provisión completada exitosamente =="

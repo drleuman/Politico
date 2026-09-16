@@ -1,8 +1,8 @@
-# Backlog de Trabajo de Fase 1 (Fundación Técnica) — Política Canon v0.2.18
+# Backlog de Trabajo de Fase 1 (Fundación Técnica) — Política Canon v0.3.12
 
-**Estado:** `DESBLOQUEADO (DICTAMEN DE AUDITORÍA EXTERNA: PASS FORMAL)`  
+**Estado:** `FASE 1.1 COMPLETADA Y CERTIFICADA (RELEASE v0.3.12 CONGELADO)`  
 **Fecha:** 2026-09-16  
-**Paquete:** `politica-canon-v0.2.18`  
+**Paquete:** `politica-canon-v0.3.12.zip`  
 
 ---
 

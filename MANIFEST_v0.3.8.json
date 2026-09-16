@@ -1,0 +1,10 @@
+﻿{
+    "version":  "0.3.8",
+    "releaseDate":  "2026-09-16",
+    "packageName":  "politica-canon-v0.3.8.zip",
+    "sizeBytes":  398865,
+    "sha256":  "f742e66decc0e1d5f55439340be2bd0dcb9f6717b657028c0fc2cfe081a696ff",
+    "fileCount":  177,
+    "canonicalDatabaseEngine":  "PostgreSQL 16+",
+    "dictamen":  "PASS (RELEASE V0.3.8 REMEDIADO CON GATE DE INTEGRACION ESTRICTA FAIL-CLOSED Y LISTO PARA DESPLIEGUE SEGURO EN PLESK)"
+}

@@ -1,17 +1,13 @@
 import { execSync } from 'child_process';
-import fs from 'fs';
-import path from 'path';
-import net from 'net';
 import pg from 'pg';
-import { PGlite } from '@electric-sql/pglite';
-
 const { Client } = pg;
 
-console.log('=== RUNNER DE INTEGRACIÓN E IMPOSICIÓN DE EVIDENCIA REAL POSTGRESQL 16 & REDIS (v0.3.7) ===\n');
+console.log('=== RUNNER DE INTEGRACIÓN REAL POSTGRESQL 16 & REDIS (v0.3.8 STRICT FAIL-CLOSED) ===\n');
 
 const ADMIN_URL = process.env.POLITICA_CANON_ADMIN_DATABASE_URL || 'postgresql://postgres:audit_dev_only_secret_do_not_use_in_prod@127.0.0.1:15432/politica_canon';
 const MIGRATION_URL = process.env.MIGRATION_DATABASE_URL || ADMIN_URL;
-const APP_URL = process.env.DATABASE_URL || 'postgresql://politica_canon_app:audit_dev_only_secret_do_not_use_in_prod@127.0.0.1:15432/politica_canon';
+const APP_TEST_PASSWORD = process.env.POLITICA_CANON_APP_TEST_PASSWORD || 'audit_dev_only_secret_do_not_use_in_prod';
+const APP_URL = process.env.DATABASE_URL || `postgresql://politica_canon_app:${APP_TEST_PASSWORD}@127.0.0.1:15432/politica_canon`;
 const REDIS_URL = process.env.REDIS_URL || 'redis://127.0.0.1:16379/0';
 const SESSION_SECRET = process.env.SESSION_SECRET || '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef';
 const APP_BASE_URL = process.env.APP_BASE_URL || 'https://peaceful-johnson.194-164-175-146.plesk.page';
@@ -32,7 +28,7 @@ async function checkDockerAvailable() {
   }
 }
 
-async function waitForDb(adminUrl, retries = 15) {
+async function waitForDb(adminUrl, retries = 20) {
   for (let i = 0; i < retries; i++) {
     const client = new Client({ connectionString: adminUrl });
     try {
@@ -48,209 +44,152 @@ async function waitForDb(adminUrl, retries = 15) {
   return false;
 }
 
-function startRedisMockServer(port = 16379) {
-  const server = net.createServer((socket) => {
-    socket.on('data', (data) => {
-      const msg = data.toString();
-      if (msg.toUpperCase().includes('PING')) {
-        socket.write('+PONG\r\n');
-      } else if (msg.toUpperCase().includes('QUIT')) {
-        socket.write('+OK\r\n');
-        socket.end();
-      } else {
-        socket.write('+OK\r\n');
-      }
-    });
-  });
-
-  return new Promise((resolve, reject) => {
-    server.listen(port, '127.0.0.1', () => {
-      console.log(`📡 [REDIS SERVER] Respondiendo solicitudes RESP Redis en 127.0.0.1:${port}`);
-      resolve(server);
-    });
-    server.on('error', (err) => {
-      if (err.code === 'EADDRINUSE') {
-        console.log(`ℹ️ Puerto ${port} ya ocupado (Redis activo).`);
-        resolve(null);
-      } else {
-        reject(err);
-      }
-    });
-  });
+function runScript(scriptPath, envVars = {}) {
+  console.log(`▶ Ejecutando script de producción: ${scriptPath}`);
+  const env = { ...process.env, ...envVars };
+  execSync(`node ${scriptPath}`, { stdio: 'inherit', env });
 }
 
-async function runIntegration() {
-  const dockerOk = await checkDockerAvailable();
-  let dockerStarted = false;
-  let mockRedisServer = null;
+async function runIntegrationTest() {
+  let composeStarted = false;
+  let fastifyApp = null;
 
-  if (dockerOk) {
-    console.log('🐳 Docker Engine activo. Iniciando contenedores PostgreSQL 16 y Redis...');
+  try {
+    // C-01: Verificación estricta de Docker (FAIL CLOSED)
+    const dockerOk = await checkDockerAvailable();
+    if (!dockerOk) {
+      console.error('❌ ERROR FATAL (REAL_PG16_AND_REDIS_REQUIRED): Docker Engine no está activo ni disponible.');
+      console.error('   El gate de integración de v0.3.8 exige estrictamente un entorno Docker funcional.');
+      process.exit(1);
+    }
+
+    console.log('🐳 Levantando contenedores PostgreSQL 16 y Redis 7 reales en Docker Compose...');
     try {
       execSync('docker compose -f docker-compose.audit.yml up -d', { stdio: 'inherit' });
-      dockerStarted = true;
-      console.log('⏳ Esperando disponibilidad de PostgreSQL 16...');
-      const ready = await waitForDb(ADMIN_URL);
-      if (!ready) throw new Error('Timeout esperando inicio de PostgreSQL 16 en Docker.');
-      console.log('✅ PostgreSQL 16 en Docker listo para conexiones.');
-    } catch (err) {
-      console.warn('⚠️ No se pudo inicializar Docker Compose:', err.message);
-      dockerStarted = false;
+      composeStarted = true;
+    } catch (composeErr) {
+      console.error('❌ ERROR FATAL (REAL_PG16_AND_REDIS_REQUIRED): Falló docker compose up:', composeErr.message);
+      process.exit(1);
+    }
+
+    console.log('⏳ Esperando disponibilidad de PostgreSQL 16 en 127.0.0.1:15432...');
+    const dbReady = await waitForDb(ADMIN_URL);
+    if (!dbReady) {
+      console.error('❌ ERROR FATAL (REAL_PG16_AND_REDIS_REQUIRED): PostgreSQL 16 no respondió en 127.0.0.1:15432.');
+      process.exit(1);
+    }
+    console.log('✅ PostgreSQL 16 en Docker Compose conectado exitosamente.');
+
+    // RONDAS 1 Y 2 PARA PROBAR FASES PRODUCTIVAS E IDEMPOTENCIA
+    for (let round = 1; round <= 2; round++) {
+      console.log(`\n--- FASE ${round}: EJECUCIÓN PRODUCTIVA (RONDA ${round} DE IDEMPOTENCIA) ---`);
+      
+      // 1. Pre-bootstrap
+      runScript('scripts/bootstrap-pre.mjs');
+
+      // 2. C-02: Asignación explícita de contraseña al rol runtime politica_canon_app para entorno de prueba
+      console.log(`🔑 [C-02 TEST SETUP] Asignando contraseña exclusiva de prueba al rol runtime 'politica_canon_app'...`);
+      const adminClient = new Client({ connectionString: ADMIN_URL });
+      await adminClient.connect();
+      await adminClient.query(`ALTER ROLE politica_canon_app WITH PASSWORD '${APP_TEST_PASSWORD}';`);
+      console.log("✅ [C-02 TEST SETUP] Contraseña de prueba asignada a 'politica_canon_app'.");
+
+      // 3. Migración DDL
+      runScript('scripts/migrate-production.mjs');
+
+      // 4. Post-bootstrap
+      runScript('scripts/bootstrap-post.mjs');
+
+      // 5. Aserciones de Catálogo en PostgreSQL 16 Real
+      console.log(`\n--- ASERCIONES DE CATÁLOGO PG16 REAL (RONDA ${round}) ---`);
+      const ownerCheck = await adminClient.query("SELECT pg_catalog.pg_get_userbyid(datdba) AS db_owner FROM pg_catalog.pg_database WHERE datname = 'politica_canon';");
+      const dbOwner = ownerCheck.rows[0]?.db_owner;
+      if (dbOwner !== 'app_owner') {
+        throw new Error(`CRITICAL FAIL: datdba es '${dbOwner}', se requiere 'app_owner'.`);
+      }
+      console.log(`✅ Catálogo PG16: datdba = '${dbOwner}' (app_owner verificado).`);
+
+      const dispCheck = await adminClient.query("SELECT rolname, rolbypassrls FROM pg_roles WHERE rolname = 'audit_dispatcher';");
+      if (!dispCheck.rows[0]?.rolbypassrls) {
+        throw new Error('CRITICAL FAIL: audit_dispatcher no tiene BYPASSRLS activado.');
+      }
+      console.log('✅ Catálogo PG16: audit_dispatcher BYPASSRLS = true.');
+
+      const funcCheck = await adminClient.query(`
+        SELECT pg_get_userbyid(p.proowner) as func_owner
+        FROM pg_proc p
+        JOIN pg_namespace n ON p.pronamespace = n.oid
+        WHERE n.nspname = 'public' AND p.proname = 'get_pending_outbox_tenants';
+      `);
+      if (funcCheck.rows[0]?.func_owner !== 'audit_dispatcher') {
+        throw new Error(`CRITICAL FAIL: get_pending_outbox_tenants es propiedad de '${funcCheck.rows[0]?.func_owner}', se requiere 'audit_dispatcher'.`);
+      }
+      console.log('✅ Catálogo PG16: get_pending_outbox_tenants pertenece a audit_dispatcher.');
+
+      // Probar denegación DML sobre app_user
+      await adminClient.query('SET ROLE app_user;');
+      let dmlDenied = false;
+      try {
+        await adminClient.query("INSERT INTO decisions (id, organization_id, workspace_id, authority_body_id, document_id, version_id, submission_id, title) VALUES ('00000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-000000000001', 'Title');");
+      } catch (err) {
+        if (err.message.includes('permission denied')) {
+          dmlDenied = true;
+        }
+      }
+      if (!dmlDenied) {
+        throw new Error('CRITICAL FAIL: app_user no recibió permission denied al intentar DML.');
+      }
+      console.log('✅ Catálogo PG16: Denegación DML para app_user verificada.');
+
+      await adminClient.query('RESET ROLE;');
+      await adminClient.end();
+    }
+
+    // VERIFICACIÓN CON SERVICIOS REALES FASTIFY /readyz HTTP 200 (C-02)
+    console.log('\n--- VERIFICACIÓN HTTP FASTIFY CON CONEXIONES REALES (PG16 + REDIS 7) ---');
+    const { buildServer } = await import('../dist/server.js');
+    fastifyApp = buildServer();
+    await fastifyApp.ready();
+
+    const healthRes = await fastifyApp.inject({ method: 'GET', url: '/healthz' });
+    const readyRes = await fastifyApp.inject({ method: 'GET', url: '/readyz' });
+    const rootRes = await fastifyApp.inject({ method: 'GET', url: '/' });
+
+    console.log(`  -> GET /healthz: ${healthRes.statusCode}`);
+    console.log(`  -> GET /readyz: ${readyRes.statusCode} payload=${readyRes.payload}`);
+    console.log(`  -> GET /: ${rootRes.statusCode}`);
+
+    if (healthRes.statusCode !== 200) {
+      throw new Error(`GET /healthz devolvió status ${healthRes.statusCode}, se requiere 200.`);
+    }
+
+    const readyBody = JSON.parse(readyRes.payload);
+    if (readyRes.statusCode !== 200 || readyBody.status !== 'ready' || readyBody.database !== 'connected' || readyBody.redis !== 'connected') {
+      throw new Error(`CRITICAL FAIL (C-02): GET /readyz devolvió HTTP ${readyRes.statusCode} (${readyRes.payload}), se requiere HTTP 200 'ready' con database='connected' y redis='connected'.`);
+    }
+
+    console.log('✅ PROBES HTTP FASTIFY: GET /readyz = 200 {"status":"ready","database":"connected","redis":"connected"} CONFIRMADO EXITOSAMENTE.');
+    console.log('\n🎉 GATE DE INTEGRACIÓN REAL v0.3.8 COMPLETO Y CERTIFICADO');
+
+  } finally {
+    // H-01: Limpieza incondicional de recursos en finally
+    if (fastifyApp) {
+      await fastifyApp.close().catch(() => {});
+    }
+
+    if (composeStarted) {
+      console.log('\n🧹 [H-01 CLEANUP] Destruyendo contenedores y volúmenes de prueba Docker Compose (down -v)...');
+      try {
+        execSync('docker compose -f docker-compose.audit.yml down -v', { stdio: 'inherit' });
+        console.log('✅ [H-01 CLEANUP] Recursos Docker destruidos incondicionalmente.');
+      } catch (downErr) {
+        console.warn('⚠️ Error al destruir contenedores Docker:', downErr.message);
+      }
     }
   }
-
-  if (!dockerStarted) {
-    console.log('ℹ️ Modo Integración Nativo PostgreSQL 16 (PGlite) + Servidor Redis RESP en 127.0.0.1:16379...');
-    mockRedisServer = await startRedisMockServer(16379);
-  }
-
-  let pgliteInstance = null;
-
-  if (dockerStarted) {
-    // 1. Ejecución productiva vía comandos Node
-    console.log('\n--- FASE 1: EJECUCIÓN DE SCRIPTS NODE SOBRE POSTGRESQL 16 REAL (DOCKER) ---');
-    execSync('node scripts/bootstrap-pre.mjs', { stdio: 'inherit' });
-    execSync('node scripts/migrate-production.mjs', { stdio: 'inherit' });
-    execSync('node scripts/bootstrap-post.mjs', { stdio: 'inherit' });
-
-    console.log('\n--- FASE 2: VERIFICACIÓN DE CATÁLOGO PG16 ---');
-    const client = new Client({ connectionString: ADMIN_URL });
-    await client.connect();
-
-    const ownerRes = await client.query("SELECT pg_catalog.pg_get_userbyid(datdba) AS db_owner FROM pg_catalog.pg_database WHERE datname = 'politica_canon';");
-    const dbOwner = ownerRes.rows[0]?.db_owner;
-    if (dbOwner !== 'app_owner') throw new Error(`CRITICAL FAIL: datdba es '${dbOwner}', se requiere 'app_owner'.`);
-    console.log(`✅ Catálogo PG16: datdba = '${dbOwner}' (app_owner verificado).`);
-
-    const dispRes = await client.query("SELECT rolname, rolbypassrls FROM pg_roles WHERE rolname = 'audit_dispatcher';");
-    if (!dispRes.rows[0]?.rolbypassrls) throw new Error('CRITICAL FAIL: audit_dispatcher no tiene BYPASSRLS.');
-    console.log('✅ Catálogo PG16: audit_dispatcher BYPASSRLS = true.');
-
-    const funcRes = await client.query("SELECT pg_get_userbyid(p.proowner) as func_owner FROM pg_proc p JOIN pg_namespace n ON p.pronamespace = n.oid WHERE n.nspname = 'public' AND p.proname = 'get_pending_outbox_tenants';");
-    if (funcRes.rows[0]?.func_owner !== 'audit_dispatcher') throw new Error('CRITICAL FAIL: get_pending_outbox_tenants no pertenece a audit_dispatcher.');
-    console.log('✅ Catálogo PG16: get_pending_outbox_tenants pertenece a audit_dispatcher.');
-
-    await client.end();
-
-    console.log('\n--- FASE 3: COMPROBACIÓN DE IDEMPOTENCIA ---');
-    execSync('node scripts/bootstrap-pre.mjs', { stdio: 'inherit' });
-    execSync('node scripts/migrate-production.mjs', { stdio: 'inherit' });
-    execSync('node scripts/bootstrap-post.mjs', { stdio: 'inherit' });
-    console.log('✅ Idempotencia de 3 fases en PG16 verificada.');
-
-  } else {
-    // Modo PGlite PG16
-    console.log('\n--- FASE 1: EJECUCIÓN DE SCRIPTS SOBRE MOTOR POSTGRESQL 16 NATIVO ---');
-    pgliteInstance = new PGlite();
-
-    const sql0 = fs.readFileSync('db/0000_bootstrap_roles.sql', 'utf8');
-    const sql1Raw = fs.readFileSync('db/migrations/0001_initial_schema.sql', 'utf8');
-    const sql1 = sql1Raw.replace(/CREATE EXTENSION IF NOT EXISTS\s+("?pgcrypto"?);?/gi, '-- pgcrypto native');
-    const sql2 = fs.readFileSync('db/0002_bootstrap_permissions.sql', 'utf8');
-
-    // Ronda 1
-    await pgliteInstance.exec(sql0);
-    await pgliteInstance.exec('SET ROLE app_owner;');
-    await pgliteInstance.exec(sql1);
-    await pgliteInstance.exec('RESET ROLE;');
-    try { await pgliteInstance.exec('ALTER DATABASE politica_canon OWNER TO app_owner;'); } catch {}
-    await pgliteInstance.exec(sql2);
-
-    // Verificaciones de Catálogo PG16
-    const dispCheck = await pgliteInstance.query("SELECT rolname, rolbypassrls FROM pg_roles WHERE rolname = 'audit_dispatcher';");
-    if (!dispCheck.rows[0]?.rolbypassrls) throw new Error('CRITICAL FAIL: audit_dispatcher sin BYPASSRLS.');
-    console.log('✅ Motor PG16 Nativo: audit_dispatcher BYPASSRLS = true.');
-
-    const funcCheck = await pgliteInstance.query("SELECT pg_get_userbyid(p.proowner) as func_owner FROM pg_proc p JOIN pg_namespace n ON p.pronamespace = n.oid WHERE n.nspname = 'public' AND p.proname = 'get_pending_outbox_tenants';");
-    if (funcCheck.rows[0]?.func_owner !== 'audit_dispatcher') throw new Error('CRITICAL FAIL: get_pending_outbox_tenants no pertenece a audit_dispatcher.');
-    console.log('✅ Motor PG16 Nativo: get_pending_outbox_tenants pertenece a audit_dispatcher.');
-
-    // Ronda 2 Idempotencia
-    console.log('\n--- FASE 2: COMPROBACIÓN DE IDEMPOTENCIA ---');
-    await pgliteInstance.exec(sql0);
-    await pgliteInstance.exec('SET ROLE app_owner;');
-    await pgliteInstance.exec('RESET ROLE;');
-    await pgliteInstance.exec(sql2);
-    console.log('✅ Idempotencia de 3 fases en Motor PG16 Nativo verificada.');
-
-    // Interceptar dbPool para que el probe Fastify de db/client.ts consulte PGlite en modo nativo
-    const dbClientModule = await import('../dist/db/client.js');
-    if (dbClientModule.dbPool) {
-      dbClientModule.dbPool.connect = async () => {
-        return {
-          query: async (text, params) => {
-            if (typeof text === 'string' && text.includes('FROM pg_user')) {
-              return {
-                rows: [{
-                  db_user: 'politica_canon_app',
-                  is_superuser: false,
-                  bypass_rls: false,
-                  can_create_db: false,
-                  can_create_role: false,
-                  can_replicate: false
-                }]
-              };
-            }
-            if (typeof text === 'string' && text.includes('FROM pg_database')) {
-              return {
-                rows: [{
-                  db_owner: 'app_owner',
-                  schema_owner: 'app_owner',
-                  can_create_schema: false,
-                  can_create_database: false
-                }]
-              };
-            }
-            const res = await pgliteInstance.query(typeof text === 'string' ? text : text.text, params);
-            return res;
-          },
-          release: () => {}
-        };
-      };
-    }
-  }
-
-  // Fastify HTTP Probe /readyz = 200 Exigido
-  console.log('\n--- FASE 3: VERIFICACIÓN HTTP FASTIFY PROBE /readyz = 200 ---');
-  const { buildServer } = await import('../dist/server.js');
-  const app = buildServer();
-  await app.ready();
-
-  const healthRes = await app.inject({ method: 'GET', url: '/healthz' });
-  const readyRes = await app.inject({ method: 'GET', url: '/readyz' });
-  const rootRes = await app.inject({ method: 'GET', url: '/' });
-
-  await app.close();
-
-  if (mockRedisServer) {
-    mockRedisServer.close();
-  }
-
-  if (dockerStarted) {
-    try {
-      execSync('docker compose -f docker-compose.audit.yml down -v', { stdio: 'pipe' });
-      console.log('🧹 Contenedores Docker de prueba destruidos.');
-    } catch {}
-  }
-
-  console.log(`  -> GET /healthz: ${healthRes.statusCode}`);
-  console.log(`  -> GET /readyz: ${readyRes.statusCode} payload=${readyRes.payload}`);
-  console.log(`  -> GET /: ${rootRes.statusCode}`);
-
-  if (healthRes.statusCode !== 200) {
-    throw new Error(`GET /healthz devolvió status ${healthRes.statusCode}, se requiere 200.`);
-  }
-
-  const readyJson = JSON.parse(readyRes.payload);
-  if (readyRes.statusCode !== 200 || readyJson.status !== 'ready') {
-    throw new Error(`CRITICAL FAIL: GET /readyz devolvió status ${readyRes.statusCode} (${readyJson.status}), se exige estrictamente HTTP 200 status 'ready'.`);
-  }
-
-  console.log('✅ PRUEBA HTTP FASTIFY: GET /readyz = 200 {"status":"ready"} CONFIRMADO CON ÉXITO.');
-  console.log('\n🎉 EVIDENCIA DE INTEGRACIÓN REAL Y CUMPLIMIENTO DE CONDICIONES DE ACEPTACIÓN v0.3.7 OK.');
 }
 
-runIntegration().catch((err) => {
-  console.error('\n❌ ERROR FATAL EN RUNNER DE INTEGRACIÓN:', err.message);
+runIntegrationTest().catch((err) => {
+  console.error('\n❌ ERROR FATAL EN PRUEBA DE INTEGRACIÓN PG16:', err.message);
   process.exit(1);
 });

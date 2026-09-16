@@ -4,6 +4,21 @@ Todas las modificaciones notables introducidas en este proyecto serán documenta
 
 El formato está basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.0.0/), y este proyecto adhiere a [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.2] - 2026-09-16
+
+### Añadido y Remediado (Dictamen de Auditoría Externa v0.3.1)
+- **Secuenciación de Base de Datos en 3 Fases Explicitas (C-01):** Dividida la inicialización de base de datos en 3 fases independientes e idempotentes:
+  1. Fase 1 Pre-Bootstrap (`db/0000_bootstrap_roles.sql` / `npm run bootstrap:pre`): Creación exclusiva de roles y grupos ejecutada como superusuario `postgres`.
+  2. Fase 2 Migración DDL (`db/migrations/0001_initial_schema.sql` / `npm run migrate:prod`): Creación de tablas, vistas e índices por el rol de migración/propietario con `pg_advisory_lock`.
+  3. Fase 3 Post-Bootstrap (`db/0002_bootstrap_permissions.sql` / `npm run bootstrap:post`): Asignación de propiedad a `app_owner`, `GRANT`/`REVOKE` a `app_user` e imposición de `ENABLE ROW LEVEL SECURITY`.
+- **Alineación del Rol Runtime `politica_canon_app` y Aserción de Seguridad (C-02):** Concedida la pertenencia de `politica_canon_app` a `app_user` con `NOSUPERUSER` y `NOBYPASSRLS`. Añadida aserción de arranque en `src/db/client.ts` que rechaza la ejecución si el usuario conectado es superusuario o tiene `rolbypassrls = true`.
+- **Soporte de Autenticación Peer vía Socket Unix Local (H-01):** Configurada la conexión por defecto vía socket Unix local (`postgresql:///?host=/var/run/postgresql`) para ejecución como usuario Unix `postgres` con comprobación de privilegios de superusuario (`usesuper = true`).
+- **Derivación Segura de Secretos en Provisión (H-02):** Actualizado `deploy/scripts/provision.sh` para derivar la contraseña de base de datos desde `/root/politica-canon/runtime.env` si existe.
+- **Limpieza de Portada Web (H-03):** Eliminado el formulario HTML simulado de `public/index.html`, delegando el control de acceso a la directiva `auth_basic` Nginx.
+- **Actualización de Metadatos del Servicio (H-04):** Actualizada la descripción de `deploy/systemd/politica-canon.service` a `v0.3.2`.
+
+---
+
 ## [0.3.1] - 2026-09-16
 
 ### Añadido y Remediado (Dictamen de Auditoría Externa v0.3.0)

@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Acceso Restringido — Intranet Política Canon</title>
+  <title>Intranet Privada — Política Canon</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -41,7 +41,7 @@
     }
 
     .container {
-      max-width: 440px;
+      max-width: 520px;
       width: 100%;
     }
 
@@ -59,9 +59,9 @@
       display: inline-flex;
       align-items: center;
       gap: 0.5rem;
-      background: rgba(88, 166, 255, 0.12);
-      border: 1px solid rgba(88, 166, 255, 0.3);
-      color: var(--accent-blue);
+      background: rgba(63, 185, 80, 0.12);
+      border: 1px solid rgba(63, 185, 80, 0.3);
+      color: var(--accent-emerald);
       padding: 0.35rem 0.85rem;
       border-radius: 9999px;
       font-size: 0.78rem;
@@ -74,9 +74,9 @@
     .status-dot {
       width: 8px;
       height: 8px;
-      background-color: var(--accent-blue);
+      background-color: var(--accent-emerald);
       border-radius: 50%;
-      box-shadow: 0 0 10px var(--accent-blue);
+      box-shadow: 0 0 10px var(--accent-emerald);
       animation: pulse 2s infinite;
     }
 
@@ -96,70 +96,19 @@
 
     p.subtitle {
       color: var(--text-muted);
-      font-size: 0.92rem;
-      line-height: 1.5;
-      margin-bottom: 2rem;
-    }
-
-    .form-group {
-      margin-bottom: 1.25rem;
-      text-align: left;
-    }
-
-    label {
-      display: block;
-      font-size: 0.82rem;
-      font-weight: 600;
-      color: var(--text-muted);
-      margin-bottom: 0.4rem;
-      text-transform: uppercase;
-      letter-spacing: 0.03em;
-    }
-
-    input[type="text"], input[type="password"] {
-      width: 100%;
-      padding: 0.75rem 1rem;
-      background: rgba(13, 17, 23, 0.7);
-      border: 1px solid var(--border-color);
-      border-radius: 8px;
-      color: var(--text-main);
-      font-family: inherit;
       font-size: 0.95rem;
-      outline: none;
-      transition: border-color 0.2s;
-    }
-
-    input[type="text"]:focus, input[type="password"]:focus {
-      border-color: var(--accent-blue);
-    }
-
-    .btn-submit {
-      width: 100%;
-      padding: 0.85rem;
-      background: var(--accent-blue);
-      color: #0d1117;
-      font-weight: 700;
-      font-size: 0.95rem;
-      border: none;
-      border-radius: 8px;
-      cursor: pointer;
-      margin-top: 0.5rem;
-      transition: background 0.2s;
-    }
-
-    .btn-submit:hover {
-      background: #79b8ff;
+      line-height: 1.6;
+      margin-bottom: 1.75rem;
     }
 
     .notice-box {
-      margin-top: 1.75rem;
-      background: rgba(210, 153, 34, 0.1);
-      border-left: 3px solid var(--accent-amber);
-      padding: 0.85rem;
+      background: rgba(88, 166, 255, 0.1);
+      border-left: 3px solid var(--accent-blue);
+      padding: 1rem;
       border-radius: 0 8px 8px 0;
-      font-size: 0.8rem;
+      font-size: 0.85rem;
       color: #e6edf3;
-      line-height: 1.4;
+      line-height: 1.5;
     }
 
     .footer {
@@ -174,35 +123,19 @@
   <div class="container">
     <div class="card">
       <div class="header-badge">
-        <span class="status-dot"></span> Intranet Privada · v0.3.0
+        <span class="status-dot"></span> Sesión Autenticada · Nginx Gateway
       </div>
-      <h1>Acceso Restringido</h1>
+      <h1>Intranet Privada — Política Canon</h1>
       <p class="subtitle">
-        Identifíquese con sus credenciales autorizadas para acceder al portal de gobernanza.
+        Portal de gobernanza, autorización colegiada y trazabilidad de auditoría inmutable.
       </p>
 
-      <form onsubmit="event.preventDefault(); alert('Portal en preparación. Identificación restringida.');">
-        <div class="form-group">
-          <label for="tenant">Organización / Tenant</label>
-          <input type="text" id="tenant" placeholder="id-tenant" required autocomplete="off">
-        </div>
-        <div class="form-group">
-          <label for="user">Identificador de Usuario</label>
-          <input type="text" id="user" placeholder="usuario@dominio.org" required autocomplete="username">
-        </div>
-        <div class="form-group">
-          <label for="password">Clave de Acceso</label>
-          <input type="password" id="password" placeholder="••••••••••••" required autocomplete="current-password">
-        </div>
-        <button type="submit" class="btn-submit">Ingresar a Intranet</button>
-      </form>
-
       <div class="notice-box">
-        <strong>Aviso de Seguridad:</strong> Este sistema opera bajo política <em>Default-Deny</em>. Todas las tentativas de acceso son registradas en el registro de auditoría inmutable.
+        <strong>Acceso Restringido:</strong> Ha accedido satisfactoriamente a través de la pasarela de autenticación. Las operaciones realizadas en este portal están sujetas a la matriz de permisos RLS e inmutabilidad de registros.
       </div>
     </div>
     <div class="footer">
-      Política Canon v0.3.0 — Sistema de Gobernanza y Auditoría Inmutable
+      Política Canon v0.3.2 — Sistema Canónico de Gobernanza y Auditoría
     </div>
   </div>
 </body>

@@ -4,6 +4,17 @@ Todas las modificaciones notables introducidas en este proyecto serán documenta
 
 El formato está basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.0.0/), y este proyecto adhiere a [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.1] - 2026-09-16
+
+### Añadido y Remediado (Dictamen de Auditoría Externa v0.3.0)
+- **Autocontención de Pruebas en Checkout Limpio (C-01):** Configurada la cadena `"test": "npm run build && node validate_v0.3.1.cjs"` en `package.json`, asegurando que `npm test` sea 100% autocontenido en repositorios clonados desde cero (`npm ci && npm test`) sin requerir ejecuciones manuales previas.
+- **Separación de Roles de Base de Datos y Bootstrap (C-02):** Desglosado el flujo de base de datos en dos comandos: `scripts/bootstrap-database.mjs` (`npm run bootstrap:prod`) ejecutable por el administrador superusuario (`postgres`) para crear roles (`app_owner`, `app_user`, `audit_worker`, etc.), y `scripts/migrate-production.mjs` (`npm run migrate:prod`) para parches DDL.
+- **Bloqueo Exclusivo y Verificación Fail-Closed de Checksums (H-01):** Incorporado `SELECT pg_advisory_lock(87850301);` en el migrador para evitar carreras de ejecución concurrente y verificación de checksums SHA-256 en `schema_migrations` que aborta inmediatamente por `CHECKSUM_MISMATCH` si se altera un archivo SQL previamente aplicado.
+- **Autenticación HTTP Nginx Real:** Activadas las directivas `auth_basic "Acceso Restringido — Intranet Política Canon";` y `auth_basic_user_file` en `deploy/plesk/vhost_nginx.conf`.
+- **Provisión Automática de Secretos de Sesión:** Añadida la generación automática de `SESSION_SECRET` de 32+ bytes (`openssl rand -hex 32`) en `deploy/scripts/provision.sh`.
+
+---
+
 ## [0.3.0] - 2026-09-16
 
 ### Añadido y Remediado (Dictamen de Auditoría de Predespliegue Politico-main)

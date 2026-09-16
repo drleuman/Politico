@@ -1,15 +1,16 @@
 {
   "name": "politica-canon",
-  "version": "0.3.0",
-  "description": "Línea base canónica de gobernanza, monolito Fastify y provisión — Política Canon v0.3.0 (Fase 1 MVP)",
+  "version": "0.3.1",
+  "description": "Línea base canónica de gobernanza, monolito Fastify y provisión — Política Canon v0.3.1 (Fase 1 MVP)",
   "type": "module",
   "main": "dist/server.js",
   "scripts": {
     "typecheck": "tsc --noEmit",
     "build": "tsc && node scratch/copy_public.cjs",
     "start": "node dist/server.js",
+    "bootstrap:prod": "node scripts/bootstrap-database.mjs",
     "migrate:prod": "node scripts/migrate-production.mjs",
-    "test": "node validate_v0.3.0.cjs"
+    "test": "npm run build && node validate_v0.3.1.cjs"
   },
   "devDependencies": {
     "@electric-sql/pglite": "^0.5.8",

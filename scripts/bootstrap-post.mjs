@@ -66,6 +66,15 @@ async function runPostBootstrap() {
 
     const sqlContent = fs.readFileSync(sqlPath, 'utf8');
 
+    // C-01 v0.3.5: ALTER DATABASE no puede ejecutarse dentro de bloques de transacción BEGIN...COMMIT ni bloques DO
+    console.log("👑 [FASE 3 C-01] Transfiriendo propiedad de la base de datos 'politica_canon' a 'app_owner' (consulta no transaccional)...");
+    try {
+      await client.query('ALTER DATABASE politica_canon OWNER TO app_owner;');
+      console.log("✅ Propiedad de la base de datos 'politica_canon' asignada exitosamente a 'app_owner'.");
+    } catch (dbOwnerErr) {
+      console.warn("⚠️ Aviso al asignar propiedad de la base de datos:", dbOwnerErr.message);
+    }
+
     console.log('⏳ [EJECUTANDO FASE 3] Aplicando db/0002_bootstrap_permissions.sql (Propiedad app_owner, permisos mínimos app_user y RLS obligatorio)...');
     await client.query('BEGIN;');
     await client.query(sqlContent);

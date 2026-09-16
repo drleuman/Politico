@@ -1,16 +1,10 @@
 -- ============================================================================
--- FASE 3: POST-BOOTSTRAP DE PROPIEDAD, PERMISOS MÍNIMOS Y RLS (v0.3.4)
+-- FASE 3: POST-BOOTSTRAP DE PROPIEDAD, PERMISOS MÍNIMOS Y RLS (v0.3.5)
 -- Ejecutar exclusivamente como SUPERUSUARIO ('postgres') tras aplicar DDLs
 -- ============================================================================
 
--- 1. C-03: Transferencia de propiedad de la base de datos y del esquema public a app_owner
-DO $$
-BEGIN
-    IF EXISTS (SELECT 1 FROM pg_database WHERE datname = 'politica_canon') THEN
-        ALTER DATABASE politica_canon OWNER TO app_owner;
-    END IF;
-END $$;
-
+-- 1. C-03: Transferencia de propiedad del esquema public a app_owner
+-- NOTA: ALTER DATABASE ... OWNER TO app_owner se ejecuta fuera de bloque transaccional en bootstrap-post.mjs (C-01)
 ALTER SCHEMA public OWNER TO app_owner;
 
 -- Revocación estricta de permisos de creación en el esquema public

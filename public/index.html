@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Política Canon — Intranet en preparación</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-color: #0d1117;
+      --card-bg: rgba(22, 27, 34, 0.75);
+      --border-color: rgba(48, 54, 61, 0.8);
+      --text-main: #f0f6fc;
+      --text-muted: #8b949e;
+      --accent-blue: #58a6ff;
+      --accent-emerald: #3fb950;
+      --accent-amber: #d29922;
+      --font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background-color: var(--bg-color);
+      color: var(--text-main);
+      font-family: var(--font-family);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 2rem 1rem;
+      background-image: 
+        radial-gradient(at 20% 20%, rgba(88, 166, 255, 0.08) 0px, transparent 50%),
+        radial-gradient(at 80% 80%, rgba(63, 185, 80, 0.05) 0px, transparent 50%);
+    }
+
+    .container {
+      max-width: 680px;
+      width: 100%;
+    }
+
+    .card {
+      background: var(--card-bg);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border: 1px solid var(--border-color);
+      border-radius: 16px;
+      padding: 2.5rem;
+      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
+    }
+
+    .header-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      background: rgba(88, 166, 255, 0.12);
+      border: 1px solid rgba(88, 166, 255, 0.3);
+      color: var(--accent-blue);
+      padding: 0.35rem 0.85rem;
+      border-radius: 9999px;
+      font-size: 0.8rem;
+      font-weight: 600;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      margin-bottom: 1.5rem;
+    }
+
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      background-color: var(--accent-blue);
+      border-radius: 50%;
+      box-shadow: 0 0 10px var(--accent-blue);
+      animation: pulse 2s infinite;
+    }
+
+    @keyframes pulse {
+      0% { opacity: 0.6; transform: scale(0.95); }
+      50% { opacity: 1; transform: scale(1.1); }
+      100% { opacity: 0.6; transform: scale(0.95); }
+    }
+
+    h1 {
+      font-size: 1.85rem;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      margin-bottom: 0.75rem;
+      color: var(--text-main);
+    }
+
+    p.subtitle {
+      color: var(--text-muted);
+      font-size: 1.05rem;
+      line-height: 1.6;
+      margin-bottom: 2rem;
+    }
+
+    .status-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 1rem;
+      margin-bottom: 2rem;
+    }
+
+    .status-item {
+      background: rgba(13, 17, 23, 0.6);
+      border: 1px solid var(--border-color);
+      padding: 1rem;
+      border-radius: 10px;
+    }
+
+    .status-item-label {
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      margin-bottom: 0.35rem;
+      font-weight: 500;
+    }
+
+    .status-item-value {
+      font-size: 0.95rem;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+    }
+
+    .val-emerald { color: var(--accent-emerald); }
+    .val-blue { color: var(--accent-blue); }
+
+    .notice-box {
+      background: rgba(210, 153, 34, 0.1);
+      border-left: 3px solid var(--accent-amber);
+      padding: 1rem;
+      border-radius: 0 8px 8px 0;
+      font-size: 0.875rem;
+      color: #e6edf3;
+      line-height: 1.5;
+    }
+
+    .footer {
+      text-align: center;
+      margin-top: 2rem;
+      font-size: 0.8rem;
+      color: var(--text-muted);
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="card">
+      <div class="header-badge">
+        <span class="status-dot"></span> Modo Privado · Fase 1 (Fundación Técnica)
+      </div>
+      <h1>Política Canon — Intranet en preparación</h1>
+      <p class="subtitle">
+        Línea base canónica de gobernanza, autorización y auditoría inmutable. El sistema se encuentra en proceso de inicialización y despliegue privado.
+      </p>
+
+      <div class="status-grid">
+        <div class="status-item">
+          <div class="status-item-label">MONOLITO HTTP API</div>
+          <div class="status-item-value val-blue">Fastify / Node.js 22</div>
+        </div>
+        <div class="status-item">
+          <div class="status-item-label">MOTOR DE DATOS</div>
+          <div class="status-item-value val-emerald">PostgreSQL 16+</div>
+        </div>
+        <div class="status-item">
+          <div class="status-item-label">SESIONES & CACHE</div>
+          <div class="status-item-value val-emerald">Redis 7+</div>
+        </div>
+        <div class="status-item">
+          <div class="status-item-label">POLÍTICA DE ACCESO</div>
+          <div class="status-item-value val-blue">Default-Deny / RLS</div>
+        </div>
+      </div>
+
+      <div class="notice-box">
+        <strong>Acceso Restringido:</strong> Esta instancia privada opera bajo la matriz de autorización estricta ratificada. No se publica información interna, usuarios ni documentos sin verificación previa.
+      </div>
+    </div>
+    <div class="footer">
+      Política Canon v0.2.18 — Fundación Técnica Ratificada (Fase 1)
+    </div>
+  </div>
+</body>
+</html>

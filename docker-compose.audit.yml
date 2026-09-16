@@ -1,0 +1,32 @@
+version: '3.8'
+
+services:
+  postgres_audit:
+    image: postgres:16-alpine
+    container_name: politica_canon_pg16_audit
+    environment:
+      POSTGRES_DB: politica_canon_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: audit_dev_only_secret_do_not_use_in_prod
+    ports:
+      - "5432:5432"
+    volumes:
+      - ./db/migrations/0001_initial_schema.sql:/docker-entrypoint-initdb.d/01_initial_schema.sql
+      - ./db/bootstrap_roles.sql:/docker-entrypoint-initdb.d/02_bootstrap_roles.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d politica_canon_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis_audit:
+    image: redis:7-alpine
+    container_name: politica_canon_redis_audit
+    command: redis-server --appendonly yes
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5

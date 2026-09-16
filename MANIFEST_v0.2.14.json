@@ -1,0 +1,10 @@
+﻿{
+    "version":  "0.2.14",
+    "releaseDate":  "2026-09-15",
+    "packageName":  "politica-canon-v0.2.14.zip",
+    "sizeBytes":  212515,
+    "sha256":  "31ee6d00b0786e009875daaac6bd5b7b8becd63a642d2710516d7eb88df82f8d",
+    "fileCount":  104,
+    "canonicalDatabaseEngine":  "PostgreSQL 16+",
+    "dictamen":  "PASS (PENDIENTE DE AUDITORÃA EXTERNA FINAL)"
+}

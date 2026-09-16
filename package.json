@@ -1,0 +1,27 @@
+{
+  "name": "politica-canon",
+  "version": "0.2.18",
+  "description": "Línea base canónica de gobernanza, autorización y auditoría — Política Canon v0.2.18",
+  "type": "module",
+  "main": "dist/auth/authorization.js",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "build": "tsc && node scratch/copy_public.cjs",
+    "start": "node dist/server.js",
+    "test": "node validate_v0.2.18.cjs"
+  },
+  "devDependencies": {
+    "@electric-sql/pglite": "^0.5.8",
+    "@types/ioredis": "^4.28.10",
+    "@types/node": "^20.11.0",
+    "@types/pg": "^8.23.1",
+    "pg": "^8.23.0",
+    "typescript": "^5.3.3"
+  },
+  "dependencies": {
+    "@fastify/static": "^10.1.3",
+    "dotenv": "^17.4.2",
+    "fastify": "^5.12.5",
+    "ioredis": "^6.0.0"
+  }
+}

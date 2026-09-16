@@ -18,7 +18,7 @@ redisClient.on('error', (err) => {
 
 export async function checkRedisHealth(): Promise<{ ok: boolean; error?: string }> {
   try {
-    if (redisClient.status === 'wait') {
+    if (redisClient.status !== 'ready' && redisClient.status !== 'connecting') {
       await redisClient.connect();
     }
     const pong = await redisClient.ping();

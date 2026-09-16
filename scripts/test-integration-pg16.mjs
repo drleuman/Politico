@@ -172,6 +172,12 @@ async function runIntegrationTest() {
     if (fastifyApp) {
       await fastifyApp.close().catch(() => {});
     }
+    try {
+      const { closeDbPool } = await import('../dist/db/client.js');
+      const { closeRedisClient } = await import('../dist/redis/client.js');
+      await closeDbPool();
+      await closeRedisClient();
+    } catch {}
 
     if (composeStarted) {
       console.log('\n🧹 [H-01/C-03 FINALLY CLEANUP] Destruyendo contenedores y volúmenes de prueba Docker Compose (down -v)...');

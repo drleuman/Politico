@@ -15,11 +15,13 @@ REVOKE ALL ON SCHEMA public FROM PUBLIC;
 GRANT USAGE, CREATE ON SCHEMA public TO app_owner;
 REVOKE CREATE ON SCHEMA public FROM politica_canon_app;
 REVOKE CREATE ON SCHEMA public FROM app_user;
+REVOKE CREATE ON SCHEMA public FROM token_resolver;
 GRANT USAGE ON SCHEMA public TO app_user;
 GRANT USAGE ON SCHEMA public TO politica_canon_app;
 GRANT USAGE ON SCHEMA public TO audit_worker;
 GRANT USAGE ON SCHEMA public TO audit_dispatcher;
 GRANT USAGE ON SCHEMA public TO audit_reader;
+GRANT USAGE ON SCHEMA public TO token_resolver;
 
 -- 2. C-03 / C-02: Transferencia de propiedad por firma exacta e inmutabilidad de excepciones
 DO $$
@@ -38,13 +40,18 @@ BEGIN
         EXECUTE format('ALTER VIEW public.%I OWNER TO app_owner;', r.table_name);
     END LOOP;
     
-    -- Transferir funciones usando pg_proc e identidades exactas, exceptuando el despachador de auditoría
+    -- Transferir funciones usando pg_proc e identidades exactas, exceptuando el despachador de auditoría y los resolvers
     FOR r IN (
         SELECT p.proname, pg_catalog.pg_get_function_identity_arguments(p.oid) as args
         FROM pg_catalog.pg_proc p
         JOIN pg_catalog.pg_namespace n ON p.pronamespace = n.oid
         WHERE n.nspname = 'public'
-          AND p.proname != 'get_pending_outbox_tenants'
+          AND p.proname NOT IN (
+            'get_pending_outbox_tenants',
+            'resolve_session_by_token',
+            'resolve_invitation_by_token',
+            'get_user_active_memberships'
+          )
     ) LOOP
         EXECUTE format('ALTER FUNCTION public.%I(%s) OWNER TO app_owner;', r.proname, r.args);
     END LOOP;
@@ -56,6 +63,27 @@ BEGIN
         WHERE n.nspname = 'public' AND p.proname = 'get_pending_outbox_tenants'
     ) THEN
         ALTER FUNCTION public.get_pending_outbox_tenants() OWNER TO audit_dispatcher;
+    END IF;
+
+    -- Asignación explícita de propiedad de las funciones de resolución a token_resolver (BYPASSRLS)
+    FOR r IN (
+        SELECT p.proname, pg_catalog.pg_get_function_identity_arguments(p.oid) as args
+        FROM pg_catalog.pg_proc p
+        JOIN pg_catalog.pg_namespace n ON p.pronamespace = n.oid
+        WHERE n.nspname = 'public'
+          AND p.proname IN (
+            'resolve_session_by_token',
+            'resolve_invitation_by_token',
+            'get_user_active_memberships'
+          )
+    ) LOOP
+        EXECUTE format('ALTER FUNCTION public.%I(%s) OWNER TO token_resolver;', r.proname, r.args);
+    END LOOP;
+
+    -- Garantizar que app_owner NO conserve membresía ni opción de administración en token_resolver
+    IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'app_owner') THEN
+        REVOKE ADMIN OPTION FOR token_resolver FROM app_owner;
+        REVOKE token_resolver FROM app_owner;
     END IF;
 END $$;
 
@@ -79,6 +107,10 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON public.organization_memberships TO app_u
 GRANT SELECT, INSERT, UPDATE, DELETE ON public.workspace_memberships TO app_user, politica_canon_app;
 GRANT SELECT, INSERT, UPDATE, DELETE ON public.role_assignments TO app_user, politica_canon_app;
 GRANT SELECT, INSERT, UPDATE ON public.audit_outbox TO app_user, politica_canon_app;
+
+-- Concesión acotada de solo lectura para token_resolver (BYPASSRLS)
+GRANT USAGE ON SCHEMA public TO token_resolver;
+GRANT SELECT ON public.user_sessions, public.invitations, public.organization_memberships, public.users TO token_resolver;
 
 -- Tablas de control y gobernanza: SOLO LECTURA (SELECT) para app_user y politica_canon_app
 GRANT SELECT ON public.organizations TO app_user, politica_canon_app;
@@ -131,6 +163,8 @@ GRANT EXECUTE ON FUNCTION public.jcs_canonicalize_jsonb(jsonb) TO app_user;
 GRANT EXECUTE ON FUNCTION public.jcs_format_number(numeric) TO app_user;
 GRANT EXECUTE ON FUNCTION public.jcs_utf16_sort_key(text) TO app_user;
 GRANT EXECUTE ON FUNCTION public.check_mfa_freshness() TO app_user;
+GRANT EXECUTE ON FUNCTION public.resolve_session_by_token(CHAR(64)) TO app_user, politica_canon_app;
+GRANT EXECUTE ON FUNCTION public.resolve_invitation_by_token(CHAR(64)) TO app_user, politica_canon_app;
 GRANT EXECUTE ON FUNCTION public.verify_audit_chain(UUID) TO app_user;
 GRANT EXECUTE ON FUNCTION public.verify_audit_chain(UUID) TO audit_reader;
 GRANT EXECUTE ON FUNCTION public.verify_audit_chain(UUID) TO audit_worker;
@@ -140,6 +174,8 @@ REVOKE EXECUTE ON FUNCTION public.get_pending_outbox_tenants() FROM PUBLIC;
 REVOKE EXECUTE ON FUNCTION public.get_pending_outbox_tenants() FROM app_user;
 REVOKE EXECUTE ON FUNCTION public.get_pending_outbox_tenants() FROM politica_canon_app;
 GRANT EXECUTE ON FUNCTION public.get_pending_outbox_tenants() TO audit_worker;
+
+GRANT EXECUTE ON FUNCTION public.get_user_active_memberships(UUID) TO app_user, politica_canon_app;
 
 -- 5. Imposición estricta de Row Level Security (RLS) en todas las tablas tenant-scoped
 DO $$

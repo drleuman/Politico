@@ -35,8 +35,8 @@ function validateConfig(): AppConfig {
     process.exit(1);
   }
 
-  if (sessionSecret && sessionSecret.length < 32) {
-    console.error('[FATAL] Configuration validation failed closed. SESSION_SECRET must be at least 32 characters in length.');
+  if (sessionSecret && (sessionSecret.length < 32 || sessionSecret.includes('default_master_key') || sessionSecret.includes('change_in_production'))) {
+    console.error('[FATAL] Configuration validation failed closed. SESSION_SECRET must be at least 32 characters in length and cannot use default placeholders.');
     process.exit(1);
   }
 

@@ -2,6 +2,7 @@ import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { dbPool } from '../db/client.js';
 import { redisClient } from '../redis/client.js';
 import { config } from '../config/env.js';
+import { sendInvitationEmail } from '../email/adapter.js';
 import {
   hashPassword,
   verifyPassword,
@@ -15,6 +16,8 @@ import {
   validateSession,
   revokeSession,
   revokeAllUserSessions,
+  getUserActiveSessions,
+  revokeSpecificSession,
 } from './session.js';
 import {
   createInvitation,
@@ -31,7 +34,7 @@ import {
 import { buildResolvedAuthorizationContext } from './roles.js';
 import { recordSecurityAuditEvent } from '../audit/events.js';
 
-const MASTER_KEY = config.sessionSecret;
+const MASTER_KEY = config.mfaMasterKey;
 
 /**
  * Control de tasa (Rate Limiting) con Redis — FAIL CLOSED
@@ -82,7 +85,7 @@ export async function registerAuthRoutes(fastify: FastifyInstance) {
   // 1. ENDPOINTS DE INVITACIONES
   // --------------------------------------------------------------------------
 
-  // POST /api/v1/invitations — Crear invitación privada (Exige RBAC, MFA y Anti-CSRF)
+  // POST /api/v1/invitations — Crear invitación privada (Exige RBAC, MFA, Anti-CSRF y Email Transport Fail-Closed)
   fastify.post('/api/v1/invitations', async (request: FastifyRequest, reply: FastifyReply) => {
     const token = extractSessionToken(request);
     const client = await pool.connect();
@@ -126,12 +129,26 @@ export async function registerAuthRoutes(fastify: FastifyInstance) {
         expiresInHours,
       });
 
+      const invitationUrl = `${config.appBaseUrl}/accept-invitation?token=${result.rawToken}`;
+
+      try {
+        await sendInvitationEmail({
+          toEmail: email.trim().toLowerCase(),
+          rawToken: result.rawToken,
+          invitationUrl,
+        });
+      } catch (emailErr: any) {
+        // En caso de fallo en el transporte de email, rollback de la invitación almacenada (FAIL-CLOSED)
+        await client.query('DELETE FROM invitations WHERE id = $1', [result.invitationId]);
+        return reply.status(503).send({ error: emailErr.message });
+      }
+
+      // Respuesta segura: NUNCA expone el rawToken ni la URL con token en el cuerpo JSON
       return reply.status(201).send({
         status: 'created',
         invitationId: result.invitationId,
-        rawToken: result.rawToken,
         expiresAt: result.expiresAt,
-        invitationUrl: `${config.appBaseUrl}/accept-invitation?token=${result.rawToken}`,
+        message: 'Invitación enviada exitosamente por correo electrónico.',
       });
     } catch (err: any) {
       return reply.status(400).send({ error: err.message });
@@ -324,8 +341,6 @@ export async function registerAuthRoutes(fastify: FastifyInstance) {
           return reply.status(403).send({ error: 'NO_ACTIVE_MEMBERSHIP: Membresía inactiva o no perteneciente a la organización especificada.' });
         }
       } else {
-        // Si no se especifica organización, buscar la primera membresía activa del usuario
-        // Usamos una consulta sin filtro GUC inicial o buscando la primera organización disponible
         const orgRes = await client.query<{ organization_id: string }>(
           `SELECT organization_id FROM organization_memberships 
            WHERE user_id = $1 AND is_active = TRUE AND valid_from <= NOW() AND (valid_until IS NULL OR valid_until > NOW()) LIMIT 1`,
@@ -438,6 +453,159 @@ export async function registerAuthRoutes(fastify: FastifyInstance) {
 
       reply.clearCookie('sid', { path: '/' });
       return reply.status(200).send({ status: 'all_sessions_revoked', count: revokedCount });
+    } finally {
+      client.release();
+    }
+  });
+
+  // GET /api/v1/sessions — Listar sesiones activas del usuario
+  fastify.get('/api/v1/sessions', async (request: FastifyRequest, reply: FastifyReply) => {
+    const token = extractSessionToken(request);
+    const client = await pool.connect();
+    try {
+      const { session, user } = await validateSession(client, token || '');
+      if (!session || !user) {
+        return reply.status(401).send({ error: 'UNAUTHENTICATED: Requiere sesión activa.' });
+      }
+
+      const sessionsList = await getUserActiveSessions(client, user.id, session.id);
+      return reply.status(200).send({ sessions: sessionsList });
+    } finally {
+      client.release();
+    }
+  });
+
+  // DELETE /api/v1/sessions/:id — Revocar sesión específica del usuario
+  fastify.delete('/api/v1/sessions/:id', async (request: FastifyRequest, reply: FastifyReply) => {
+    const token = extractSessionToken(request);
+    const { id } = request.params as any;
+    const client = await pool.connect();
+    try {
+      const { session, user } = await validateSession(client, token || '');
+      if (!session || !user) {
+        return reply.status(401).send({ error: 'UNAUTHENTICATED: Requiere sesión activa.' });
+      }
+
+      if (!verifyCsrfToken(request, session.antiCsrfTokenHash)) {
+        return reply.status(403).send({ error: 'CSRF_INVALID: Token Anti-CSRF no válido o ausente.' });
+      }
+
+      const revoked = await revokeSpecificSession(client, user.id, id);
+      if (!revoked) {
+        return reply.status(404).send({ error: 'SESSION_NOT_FOUND: Sesión no encontrada o ya revocada.' });
+      }
+
+      await recordSecurityAuditEvent(client, {
+        organizationId: session.organizationId,
+        actorId: user.id,
+        eventType: 'SESSION_REVOKED',
+        payload: { targetSessionId: id },
+      });
+
+      return reply.status(200).send({ status: 'session_revoked' });
+    } finally {
+      client.release();
+    }
+  });
+
+  // GET /api/v1/users — Listar usuarios de la organización (ADMIN / COORDINATOR + MFA reciente)
+  fastify.get('/api/v1/users', async (request: FastifyRequest, reply: FastifyReply) => {
+    const token = extractSessionToken(request);
+    const client = await pool.connect();
+    try {
+      const { session, user } = await validateSession(client, token || '');
+      if (!session || !user) {
+        return reply.status(401).send({ error: 'UNAUTHENTICATED: Requiere sesión activa.' });
+      }
+
+      const authContext = await buildResolvedAuthorizationContext(client, session.userId, session.organizationId, session.mfaVerifiedAt);
+      const isGovernanceUser = authContext.roles.includes('ADMIN') || authContext.roles.includes('COORDINATOR');
+      if (!isGovernanceUser) {
+        return reply.status(403).send({ error: 'FORBIDDEN: Requiere rol ADMIN o COORDINATOR para consultar la lista de usuarios.' });
+      }
+
+      if (!user.mfaEnabled || authContext.mfaAgeSeconds === undefined || authContext.mfaAgeSeconds > 900) {
+        return reply.status(403).send({ error: 'MFA_REQUIRED: Requiere MFA habilitado y verificación reciente (<15 min) para gestionar usuarios.' });
+      }
+
+      await client.query("SELECT set_config('app.current_organization_id', $1, false)", [session.organizationId]);
+      const usersRes = await client.query(
+        `SELECT u.id, u.email, u.full_name, u.is_active, u.mfa_enabled, u.created_at
+         FROM users u
+         JOIN organization_memberships om ON om.user_id = u.id AND om.organization_id = $1
+         ORDER BY u.created_at DESC`,
+        [session.organizationId]
+      );
+
+      return reply.status(200).send({
+        users: usersRes.rows.map(r => ({
+          id: r.id,
+          email: r.email,
+          fullName: r.full_name,
+          isActive: r.is_active,
+          mfaEnabled: r.mfa_enabled,
+          createdAt: new Date(r.created_at).toISOString(),
+        }))
+      });
+    } finally {
+      client.release();
+    }
+  });
+
+  // PATCH /api/v1/users/:id/status — Activar/Desactivar cuenta de usuario (ADMIN / COORDINATOR + MFA reciente)
+  fastify.patch('/api/v1/users/:id/status', async (request: FastifyRequest, reply: FastifyReply) => {
+    const token = extractSessionToken(request);
+    const { id } = request.params as any;
+    const body = request.body as any || {};
+    const { isActive } = body;
+
+    if (typeof isActive !== 'boolean') {
+      return reply.status(400).send({ error: 'MISSING_FIELDS: el campo boolean isActive es obligatorio.' });
+    }
+
+    const client = await pool.connect();
+    try {
+      const { session, user } = await validateSession(client, token || '');
+      if (!session || !user) {
+        return reply.status(401).send({ error: 'UNAUTHENTICATED: Requiere sesión activa.' });
+      }
+
+      if (!verifyCsrfToken(request, session.antiCsrfTokenHash)) {
+        return reply.status(403).send({ error: 'CSRF_INVALID: Token Anti-CSRF no válido o ausente.' });
+      }
+
+      const authContext = await buildResolvedAuthorizationContext(client, session.userId, session.organizationId, session.mfaVerifiedAt);
+      const isGovernanceUser = authContext.roles.includes('ADMIN') || authContext.roles.includes('COORDINATOR');
+      if (!isGovernanceUser) {
+        return reply.status(403).send({ error: 'FORBIDDEN: Requiere rol ADMIN o COORDINATOR para actualizar el estado de cuenta.' });
+      }
+
+      if (!user.mfaEnabled || authContext.mfaAgeSeconds === undefined || authContext.mfaAgeSeconds > 900) {
+        return reply.status(403).send({ error: 'MFA_REQUIRED: Requiere MFA habilitado y verificación reciente (<15 min) para gestionar usuarios.' });
+      }
+
+      await client.query("SELECT set_config('app.current_organization_id', $1, false)", [session.organizationId]);
+      const updateRes = await client.query(
+        `UPDATE users SET is_active = $1 WHERE id = $2 RETURNING id, email, is_active`,
+        [isActive, id]
+      );
+
+      if (updateRes.rows.length === 0) {
+        return reply.status(404).send({ error: 'USER_NOT_FOUND: Usuario no encontrado.' });
+      }
+
+      if (!isActive) {
+        await revokeAllUserSessions(client, id);
+      }
+
+      await recordSecurityAuditEvent(client, {
+        organizationId: session.organizationId,
+        actorId: session.userId,
+        eventType: 'USER_STATUS_UPDATED',
+        payload: { targetUserId: id, isActive },
+      });
+
+      return reply.status(200).send({ status: 'updated', user: updateRes.rows[0] });
     } finally {
       client.release();
     }

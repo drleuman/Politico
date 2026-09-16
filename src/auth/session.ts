@@ -232,3 +232,52 @@ export async function revokeAllUserSessions(client: PoolClient, userId: string):
 export async function updateSessionMfaVerified(client: PoolClient, sessionId: string): Promise<void> {
   await client.query(`UPDATE user_sessions SET mfa_verified_at = NOW() WHERE id = $1`, [sessionId]);
 }
+
+/**
+ * Obtiene todas las sesiones activas de un usuario
+ */
+export async function getUserActiveSessions(
+  client: PoolClient,
+  userId: string,
+  currentSessionId?: string
+): Promise<Array<{
+  id: string;
+  ipAddress: string;
+  userAgent: string;
+  createdAt: string;
+  idleExpiresAt: string;
+  isCurrent: boolean;
+}>> {
+  const res = await client.query(
+    `SELECT id, ip_address, user_agent, created_at, idle_expires_at
+     FROM user_sessions
+     WHERE user_id = $1 AND revoked_at IS NULL AND idle_expires_at > NOW() AND absolute_expires_at > NOW()
+     ORDER BY created_at DESC`,
+    [userId]
+  );
+
+  return res.rows.map(r => ({
+    id: r.id,
+    ipAddress: r.ip_address,
+    userAgent: r.user_agent,
+    createdAt: new Date(r.created_at).toISOString(),
+    idleExpiresAt: new Date(r.idle_expires_at).toISOString(),
+    isCurrent: currentSessionId ? r.id === currentSessionId : false,
+  }));
+}
+
+/**
+ * Revoca una sesión específica de un usuario por su UUID de sesión
+ */
+export async function revokeSpecificSession(
+  client: PoolClient,
+  userId: string,
+  targetSessionId: string
+): Promise<boolean> {
+  const res = await client.query(
+    `UPDATE user_sessions SET revoked_at = NOW() WHERE id = $1 AND user_id = $2 AND revoked_at IS NULL`,
+    [targetSessionId, userId]
+  );
+  return (res.rowCount ?? 0) > 0;
+}
+

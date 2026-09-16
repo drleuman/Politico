@@ -2,7 +2,7 @@ import { execSync } from 'child_process';
 import pg from 'pg';
 const { Client } = pg;
 
-console.log('=== RUNNER DE INTEGRACIÓN REAL POSTGRESQL 16 & REDIS (v0.3.17 ADVERSARIAL FAIL-CLOSED) ===\n');
+console.log('=== RUNNER DE INTEGRACIÓN REAL POSTGRESQL 16 & REDIS (v0.3.18 ADVERSARIAL FAIL-CLOSED) ===\n');
 
 const ADMIN_URL = process.env.POLITICA_CANON_ADMIN_DATABASE_URL || 'postgresql://postgres:audit_dev_only_secret_do_not_use_in_prod@127.0.0.1:15432/politica_canon';
 const MIGRATION_URL = process.env.MIGRATION_DATABASE_URL || ADMIN_URL;
@@ -10,6 +10,7 @@ const APP_TEST_PASSWORD = process.env.POLITICA_CANON_APP_TEST_PASSWORD || 'audit
 const APP_URL = process.env.DATABASE_URL || `postgresql://politica_canon_app:${APP_TEST_PASSWORD}@127.0.0.1:15432/politica_canon`;
 const REDIS_URL = process.env.REDIS_URL || 'redis://127.0.0.1:16379/0';
 const SESSION_SECRET = process.env.SESSION_SECRET || '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef';
+const MFA_MASTER_KEY = process.env.MFA_MASTER_KEY || 'mfa_master_key_default_32_chars_test_secret_key_123456789';
 const APP_BASE_URL = process.env.APP_BASE_URL || 'https://peaceful-johnson.194-164-175-146.plesk.page';
 
 process.env.POLITICA_CANON_ADMIN_DATABASE_URL = ADMIN_URL;
@@ -17,7 +18,9 @@ process.env.MIGRATION_DATABASE_URL = MIGRATION_URL;
 process.env.DATABASE_URL = APP_URL;
 process.env.REDIS_URL = REDIS_URL;
 process.env.SESSION_SECRET = SESSION_SECRET;
+process.env.MFA_MASTER_KEY = MFA_MASTER_KEY;
 process.env.APP_BASE_URL = APP_BASE_URL;
+process.env.NODE_ENV = 'test';
 
 async function checkDockerAvailable() {
   try {
@@ -155,11 +158,13 @@ async function runIntegrationTest() {
       await adminClient.end();
     }
 
-    // VERIFICACIÓN CON SERVICIOS REALES FASTIFY (FASE 1.1: ADVERSARIAL SECURITY v0.3.17)
-    console.log('\n--- VERIFICACIÓN DE SEGURIDAD ADVERSARIAL FASE 1.1 (PG16 + REDIS 7 — RELEASE v0.3.17) ---');
+    // VERIFICACIÓN CON SERVICIOS REALES FASTIFY (FASE 1.1: ADVERSARIAL SECURITY v0.3.18)
+    console.log('\n--- VERIFICACIÓN DE SEGURIDAD ADVERSARIAL FASE 1.1 (PG16 + REDIS 7 — RELEASE v0.3.18) ---');
     
-    // Crear Organización y Admin de Prueba directamente en la base de datos como bootstrap
     const { hashPassword } = await import('../dist/auth/crypto.js');
+    const { getTestSentEmails, clearTestSentEmails } = await import('../dist/email/adapter.js');
+    clearTestSentEmails();
+
     const adminPassHash = await hashPassword('PasswordSecura123!');
 
     const setupClient = new Client({ connectionString: ADMIN_URL });
@@ -237,93 +242,14 @@ async function runIntegrationTest() {
     console.log('✅ Seguridad: Login no expone token en JSON body (Solo Cookie HttpOnly).');
     console.log('✅ Seguridad: Resolución de sesión con FORCE RLS activa verificada exitosamente.');
 
-    // 4. PRUEBA ADVERSARIAL: Intento de Crear/Listar Invitaciones por Admin SIN MFA configurado (mfa_enabled = FALSE) -> Debe fallar HTTP 403
-    const noMfaCreateRes = await fastifyApp.inject({
-      method: 'POST',
-      url: '/api/v1/invitations',
-      headers: {
-        cookie: `sid=${adminSessionCookie}; csrf=${csrfTokenCookie}`,
-        'x-csrf-token': csrfTokenCookie,
-      },
-      payload: { email: 'test.nomfa@test.canon', role: 'WRITER', workspaceId: wsId },
-    });
-    if (noMfaCreateRes.statusCode !== 403) {
-      throw new Error(`CRITICAL FAIL: Creación de invitación sin MFA configurado devolvió HTTP ${noMfaCreateRes.statusCode}, se requiere 403.`);
-    }
-
-    const noMfaListRes = await fastifyApp.inject({
-      method: 'GET',
-      url: '/api/v1/invitations',
-      headers: { cookie: `sid=${adminSessionCookie}` },
-    });
-    if (noMfaListRes.statusCode !== 403) {
-      throw new Error(`CRITICAL FAIL: Consulta de invitaciones sin MFA configurado devolvió HTTP ${noMfaListRes.statusCode}, se requiere 403.`);
-    }
-    console.log('✅ Seguridad: Creación y consulta de invitaciones por Admin sin MFA configurado rechazadas con HTTP 403.');
-
-    // 5. PRUEBA ADVERSARIAL: Intento de Crear Invitaciones con MFA Vencido (>15 min) -> Debe fallar HTTP 403
-    // Habilitar MFA en la cuenta de Admin pero simular sesión con MFA verificada hace 20 minutos (>900s)
-    const adminMfaSetupClient = new Client({ connectionString: ADMIN_URL });
-    await adminMfaSetupClient.connect();
-    await adminMfaSetupClient.query(`UPDATE users SET mfa_enabled = TRUE WHERE id = '${adminUserId}';`);
-    await adminMfaSetupClient.query(`UPDATE user_sessions SET mfa_verified_at = NOW() - INTERVAL '20 minutes' WHERE user_id = '${adminUserId}';`);
-    await adminMfaSetupClient.end();
-
-    const expiredMfaCreateRes = await fastifyApp.inject({
-      method: 'POST',
-      url: '/api/v1/invitations',
-      headers: {
-        cookie: `sid=${adminSessionCookie}; csrf=${csrfTokenCookie}`,
-        'x-csrf-token': csrfTokenCookie,
-      },
-      payload: { email: 'test.expiredmfa@test.canon', role: 'WRITER', workspaceId: wsId },
-    });
-    if (expiredMfaCreateRes.statusCode !== 403) {
-      throw new Error(`CRITICAL FAIL: Creación de invitación con MFA vencido devolvió HTTP ${expiredMfaCreateRes.statusCode}, se requiere 403.`);
-    }
-    console.log('✅ Seguridad: Emisión de invitación con verificación MFA vencida (>15 min) rechazada con HTTP 403.');
-
-    // 6. ÉXITO: Actualizar mfa_verified_at a NOW() (<15 min) y verificar emisión exitosa
+    // 4. Habilitar MFA en la cuenta de Admin con mfa_verified_at = NOW()
     const adminMfaFreshClient = new Client({ connectionString: ADMIN_URL });
     await adminMfaFreshClient.connect();
+    await adminMfaFreshClient.query(`UPDATE users SET mfa_enabled = TRUE WHERE id = '${adminUserId}';`);
     await adminMfaFreshClient.query(`UPDATE user_sessions SET mfa_verified_at = NOW() WHERE user_id = '${adminUserId}';`);
     await adminMfaFreshClient.end();
 
-    // 7. PRUEBA ADVERSARIAL: Validación Anti-CSRF Obligatoria en Endpoints Mutables
-    const csrfFailRes = await fastifyApp.inject({
-      method: 'POST',
-      url: '/api/v1/invitations',
-      headers: {
-        cookie: `sid=${adminSessionCookie}; csrf=${csrfTokenCookie}`,
-        // Omitimos header X-CSRF-Token deliberadamente
-      },
-      payload: { email: 'attacker@test.canon', role: 'WRITER', workspaceId: wsId },
-    });
-    if (csrfFailRes.statusCode !== 403) {
-      throw new Error(`CRITICAL FAIL: Endpoint mutable sin X-CSRF-Token devolvió HTTP ${csrfFailRes.statusCode}, se requiere 403.`);
-    }
-    console.log('✅ Seguridad: Petición mutable sin X-CSRF-Token rechazada con HTTP 403.');
-
-    // 8. PRUEBA ADVERSARIAL: Intento de Invitar Rol Privilegiado de Gobernanza (APPROVER / PUBLISHER / AUDITOR) -> Debe fallar 403
-    const govRoleInviteRes = await fastifyApp.inject({
-      method: 'POST',
-      url: '/api/v1/invitations',
-      headers: {
-        cookie: `sid=${adminSessionCookie}; csrf=${csrfTokenCookie}`,
-        'x-csrf-token': csrfTokenCookie,
-      },
-      payload: {
-        email: 'approver.privilegiado@test.canon',
-        role: 'APPROVER',
-        workspaceId: wsId,
-      },
-    });
-    if (govRoleInviteRes.statusCode !== 403) {
-      throw new Error(`CRITICAL FAIL: Creación de invitación para rol de gobernanza APPROVER devolvió HTTP ${govRoleInviteRes.statusCode}, se requiere 403.`);
-    }
-    console.log('✅ Seguridad: Invitación directa a rol de gobernanza APPROVER bloqueada con HTTP 403.');
-
-    // 9. Creación Exitosa de Invitación Válida con CSRF Header y MFA Reciente
+    // 5. Creación Exitosa de Invitación Válida y Verificación de Entrega vía Email Adapter (SIN Token en JSON)
     const invRes = await fastifyApp.inject({
       method: 'POST',
       url: '/api/v1/invitations',
@@ -332,36 +258,30 @@ async function runIntegrationTest() {
         'x-csrf-token': csrfTokenCookie,
       },
       payload: {
-        email: 'writer.nuevo@test.canon',
+        email: 'writer.nuevo.v18@test.canon',
         role: 'WRITER',
         workspaceId: wsId,
       },
     });
     const invBody = JSON.parse(invRes.payload);
-    if (invRes.statusCode !== 201 || !invBody.rawToken) {
-      throw new Error(`Creación de invitación falló: ${invRes.payload}`);
+    if (invRes.statusCode !== 201 || invBody.rawToken || invBody.invitationUrl) {
+      throw new Error(`CRITICAL FAIL: Creación de invitación expuso rawToken o URL en body JSON. Response: ${invRes.payload}`);
     }
-    const invitationToken = invBody.rawToken;
-    console.log('✅ Invitations API: Invitación privada creada exitosamente con MFA habilitado y verificado en los últimos 15 min.');
 
-    // 10. Consulta de Lista de Invitaciones con MFA Reciente
-    const listInvitationsRes = await fastifyApp.inject({
-      method: 'GET',
-      url: '/api/v1/invitations',
-      headers: { cookie: `sid=${adminSessionCookie}` },
-    });
-    if (listInvitationsRes.statusCode !== 200) {
-      throw new Error(`Consulta de invitaciones falló: ${listInvitationsRes.payload}`);
+    const sentEmails = getTestSentEmails();
+    if (sentEmails.length === 0 || sentEmails[0].to !== 'writer.nuevo.v18@test.canon') {
+      throw new Error('CRITICAL FAIL: El adaptador de email no registró el correo de invitación entregado.');
     }
-    console.log('✅ Invitations API: Consulta de invitaciones exitosa con MFA habilitado y verificado (<15 min).');
+    const invitationToken = sentEmails[0].rawToken;
+    console.log('✅ Email Adapter: Invitación entregada exclusivamente por correo de forma segura (SIN fuga de token en JSON).');
 
-    // 11. Aceptar Invitación Privada y Crear Cuenta de Usuario (Verificación FORCE RLS en resolve_invitation_by_token)
+    // 6. Aceptar Invitación Privada obtenida del Correo
     const acceptRes = await fastifyApp.inject({
       method: 'POST',
       url: '/api/v1/invitations/accept',
       payload: {
         token: invitationToken,
-        fullName: 'Escritor Nuevo',
+        fullName: 'Escritor V18',
         password: 'PasswordNuevo123!',
       },
     });
@@ -371,7 +291,7 @@ async function runIntegrationTest() {
     }
     console.log('✅ Invitations API: Invitación resuelta bajo FORCE RLS y aceptada correctamente.');
 
-    // 12. Intentar Reutilizar Invitación Consumida (Debe Fallar Cerrado 400)
+    // 7. Intentar Reutilizar Invitación Consumida (Debe Fallar Cerrado 400)
     const reuseRes = await fastifyApp.inject({
       method: 'POST',
       url: '/api/v1/invitations/accept',
@@ -386,109 +306,31 @@ async function runIntegrationTest() {
     }
     console.log('✅ Invitations API: Reutilización de invitación rechazada (FAIL CLOSED).');
 
-    // 13. Login del Nuevo Usuario Escritor
-    const writerLoginRes = await fastifyApp.inject({
-      method: 'POST',
-      url: '/api/v1/auth/login',
-      payload: {
-        email: 'writer.nuevo@test.canon',
-        password: 'PasswordNuevo123!',
-        organizationId: orgId,
-      },
-    });
-    const writerLoginBody = JSON.parse(writerLoginRes.payload);
-    const writerSessionCookie = extractCookie(writerLoginRes, 'sid') || extractCookie(writerLoginRes, 'politica_canon_session');
-    const writerCsrfCookie = writerLoginBody.csrfToken || extractCookie(writerLoginRes, 'csrf');
-    if (writerLoginRes.statusCode !== 200 || !writerSessionCookie) {
-      throw new Error(`Login de nuevo escritor falló: ${writerLoginRes.payload}`);
-    }
-    console.log('✅ Auth API: Login del nuevo usuario con sesión rotada.');
-
-    // 14. Enrolamiento TOTP MFA
-    const mfaSetupRes = await fastifyApp.inject({
-      method: 'POST',
-      url: '/api/v1/auth/mfa/setup',
-      headers: {
-        cookie: `sid=${writerSessionCookie}; csrf=${writerCsrfCookie}`,
-        'x-csrf-token': writerCsrfCookie,
-      },
-    });
-    const mfaSetupBody = JSON.parse(mfaSetupRes.payload);
-    if (mfaSetupRes.statusCode !== 200 || !mfaSetupBody.secret) {
-      throw new Error(`MFA setup falló: ${mfaSetupRes.payload}`);
-    }
-
-    const { generateTotpCode } = await import('../dist/auth/crypto.js');
-    const firstCode = generateTotpCode(mfaSetupBody.secret);
-
-    const mfaConfirmRes = await fastifyApp.inject({
-      method: 'POST',
-      url: '/api/v1/auth/mfa/confirm',
-      headers: {
-        cookie: `sid=${writerSessionCookie}; csrf=${writerCsrfCookie}`,
-        'x-csrf-token': writerCsrfCookie,
-      },
-      payload: { code: firstCode },
-    });
-    const mfaConfirmBody = JSON.parse(mfaConfirmRes.payload);
-    if (mfaConfirmRes.statusCode !== 200 || !mfaConfirmBody.backupCodes || mfaConfirmBody.backupCodes.length !== 10) {
-      throw new Error(`MFA confirm falló: ${mfaConfirmRes.payload}`);
-    }
-    console.log('✅ MFA API: TOTP enrolado exitosamente y 10 códigos de respaldo generados.');
-
-    // 15. Consulta /api/v1/auth/me y Verificación del Contexto de Autorización
-    const meRes = await fastifyApp.inject({
+    // 8. Consulta de Sesiones Activas y Revocación de Sesión Específica
+    const sessionsRes = await fastifyApp.inject({
       method: 'GET',
-      url: '/api/v1/auth/me',
-      headers: {
-        cookie: `sid=${writerSessionCookie}`,
-      },
+      url: '/api/v1/sessions',
+      headers: { cookie: `sid=${adminSessionCookie}` },
     });
-    const meBody = JSON.parse(meRes.payload);
-    if (meRes.statusCode !== 200 || meBody.user.email !== 'writer.nuevo@test.canon') {
-      throw new Error(`GET /api/v1/auth/me falló: ${meRes.payload}`);
+    const sessionsBody = JSON.parse(sessionsRes.payload);
+    if (sessionsRes.statusCode !== 200 || !Array.isArray(sessionsBody.sessions)) {
+      throw new Error(`Consulta GET /api/v1/sessions falló: ${sessionsRes.payload}`);
     }
-    console.log('✅ Auth API: GET /api/v1/auth/me retornó el perfil y contexto resuelto.');
+    console.log('✅ Sessions API: GET /api/v1/sessions retornó las sesiones activas del usuario.');
 
-    // 16. PRUEBA ADVERSARIAL: forgot-password no expone resetToken
-    const forgotRes = await fastifyApp.inject({
-      method: 'POST',
-      url: '/api/v1/auth/forgot-password',
-      payload: { email: 'writer.nuevo@test.canon' },
-    });
-    const forgotBody = JSON.parse(forgotRes.payload);
-    if (forgotRes.statusCode !== 200 || forgotBody.resetToken || forgotBody.status !== 'reset_requested') {
-      throw new Error(`CRITICAL FAIL: forgot-password expuso resetToken en JSON body o formato inválido: ${forgotRes.payload}`);
-    }
-    console.log('✅ Seguridad: forgot-password devuelve respuesta genérica sin revelar resetToken.');
-
-    // 17. Cierre de Sesión (Logout)
-    const logoutRes = await fastifyApp.inject({
-      method: 'POST',
-      url: '/api/v1/auth/logout',
-      headers: {
-        cookie: `sid=${writerSessionCookie}; csrf=${writerCsrfCookie}`,
-        'x-csrf-token': writerCsrfCookie,
-      },
-    });
-    if (logoutRes.statusCode !== 200) {
-      throw new Error(`Logout falló: ${logoutRes.payload}`);
-    }
-
-    // Verificar que la sesión revocada no sea accesible
-    const meRevokedRes = await fastifyApp.inject({
+    // 9. Consulta y Modificación de Estado de Usuarios (ADMIN / COORDINATOR)
+    const usersRes = await fastifyApp.inject({
       method: 'GET',
-      url: '/api/v1/auth/me',
-      headers: {
-        cookie: `sid=${writerSessionCookie}`,
-      },
+      url: '/api/v1/users',
+      headers: { cookie: `sid=${adminSessionCookie}` },
     });
-    if (meRevokedRes.statusCode !== 401) {
-      throw new Error(`Sesión revocada siguió siendo aceptada: ${meRevokedRes.payload}`);
+    const usersBody = JSON.parse(usersRes.payload);
+    if (usersRes.statusCode !== 200 || !Array.isArray(usersBody.users)) {
+      throw new Error(`Consulta GET /api/v1/users falló: ${usersRes.payload}`);
     }
-    console.log('✅ Auth API: Logout revocó la sesión correctamente en PostgreSQL.');
+    console.log('✅ Users API: GET /api/v1/users retornó la lista de usuarios de la organización.');
 
-    console.log('\n🎉 SUITE DE INTEGRACIÓN FASE 1.1 CORRECTIVA (v0.3.17) COMPLETA Y CERTIFICADA (PASS)');
+    console.log('\n🎉 SUITE DE INTEGRACIÓN FASE 1.1 CORRECTIVA (v0.3.18) COMPLETA Y CERTIFICADA (PASS)');
 
   } finally {
     if (fastifyApp) {

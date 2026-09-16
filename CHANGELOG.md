@@ -4,6 +4,18 @@ Todas las modificaciones notables introducidas en este proyecto serán documenta
 
 El formato está basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.0.0/), y este proyecto adhiere a [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.18] - 2026-09-17
+
+### Añadido y Endurecido (Fase 1.1 Funcional Completa)
+- **Adaptador de Email Fail-Closed (`src/email/adapter.ts`):** Entrega de invitaciones privadas exclusivamente a través de transporte de correo configurable. Si no hay servicio de email disponible (`SMTP_*`), la petición `POST /api/v1/invitations` falla cerrada con HTTP 503 y **nunca** expone el token en la respuesta REST o logs.
+- **Clave Maestra MFA Independiente (`MFA_MASTER_KEY`):** Incorporada la variable `MFA_MASTER_KEY` (mín. 32 caracteres) validada en `src/config/env.ts` para cifrado AES-256-GCM de secretos TOTP en reposo, separándola incondicionalmente de `SESSION_SECRET`.
+- **Migración DDL Forward-Only (`db/migrations/0005_fase_1_1_functional.sql`):** Añadidos índices de alto rendimiento para `user_sessions`, `invitations` y `organization_memberships`, ratificando la propiedad de resolvers en `token_resolver`.
+- **Nuevos Endpoints de Gestión de Usuarios y Sesiones (`src/auth/routes.ts`):** `GET /api/v1/sessions` (listar sesiones del usuario), `DELETE /api/v1/sessions/:id` (revocar sesión por ID), `GET /api/v1/users` (listar usuarios del ámbito) y `PATCH /api/v1/users/:id/status` (activar/desactivar cuenta con revocación automática de sesiones).
+- **Interfaz de Usuario (SPA) Intranet Privada (`public/index.html`):** Desarrollada interfaz de usuario completa, sobria y accesible con vistas dinámicas para Login, Aceptación de Invitación, Enrolamiento/Paso Elevado MFA, Perfil de Usuario, Sesiones Activas, Gestión de Invitaciones y Gestión de Usuarios.
+- **Protección Anti-Enumeración y Frescura MFA (<15 min):** Mensajes de error neutros e indistinguibles en login y recuperación de contraseña; exigencia de verificación TOTP reciente en todas las operaciones sensibles.
+
+---
+
 ## [0.3.17] - 2026-09-17
 
 ### Remediado y Endurecido (Fase 1.1 Correctiva — Inmutabilidad de Release y Normalización CRLF)

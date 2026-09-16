@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- Política Canon v0.3.17 -->
+<!-- Política Canon v0.3.18 — Intranet Privada y Gestión de Gobernanza -->
 <html lang="es">
 <head>
   <meta charset="UTF-8">
@@ -11,12 +11,14 @@
   <style>
     :root {
       --bg-color: #0d1117;
-      --card-bg: rgba(22, 27, 34, 0.85);
+      --card-bg: rgba(22, 27, 34, 0.90);
+      --card-inner-bg: rgba(13, 17, 23, 0.6);
       --border-color: rgba(48, 54, 61, 0.8);
       --text-main: #f0f6fc;
       --text-muted: #8b949e;
       --accent-blue: #58a6ff;
       --accent-emerald: #3fb950;
+      --accent-red: #f85149;
       --accent-amber: #d29922;
       --font-family: 'Inter', system-ui, -apple-system, sans-serif;
     }
@@ -33,8 +35,9 @@
       font-family: var(--font-family);
       min-height: 100vh;
       display: flex;
+      flex-direction: column;
       align-items: center;
-      justify-content: center;
+      justify-content: flex-start;
       padding: 2rem 1rem;
       background-image: 
         radial-gradient(at 20% 20%, rgba(88, 166, 255, 0.08) 0px, transparent 50%),
@@ -42,7 +45,7 @@
     }
 
     .container {
-      max-width: 520px;
+      max-width: 860px;
       width: 100%;
     }
 
@@ -54,6 +57,7 @@
       border-radius: 16px;
       padding: 2.5rem;
       box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
+      margin-bottom: 1.5rem;
     }
 
     .header-badge {
@@ -102,14 +106,139 @@
       margin-bottom: 1.75rem;
     }
 
-    .notice-box {
-      background: rgba(88, 166, 255, 0.1);
-      border-left: 3px solid var(--accent-blue);
-      padding: 1rem;
-      border-radius: 0 8px 8px 0;
+    .nav-bar {
+      display: flex;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+      margin-bottom: 1.5rem;
+      border-bottom: 1px solid var(--border-color);
+      padding-bottom: 0.75rem;
+    }
+
+    .nav-btn {
+      background: transparent;
+      border: 1px solid transparent;
+      color: var(--text-muted);
+      padding: 0.5rem 1rem;
+      border-radius: 8px;
       font-size: 0.85rem;
-      color: #e6edf3;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .nav-btn:hover {
+      color: var(--text-main);
+      background: rgba(255, 255, 255, 0.05);
+    }
+
+    .nav-btn.active {
+      color: var(--accent-blue);
+      background: rgba(88, 166, 255, 0.12);
+      border-color: rgba(88, 166, 255, 0.3);
+    }
+
+    .form-group {
+      margin-bottom: 1.25rem;
+    }
+
+    label {
+      display: block;
+      font-size: 0.82rem;
+      font-weight: 600;
+      color: var(--text-muted);
+      margin-bottom: 0.5rem;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+    }
+
+    input, select {
+      width: 100%;
+      background: var(--card-inner-bg);
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      padding: 0.75rem 1rem;
+      color: var(--text-main);
+      font-family: inherit;
+      font-size: 0.95rem;
+      transition: border-color 0.2s ease;
+    }
+
+    input:focus, select:focus {
+      outline: none;
+      border-color: var(--accent-blue);
+      box-shadow: 0 0 0 3px rgba(88, 166, 255, 0.15);
+    }
+
+    .btn {
+      background: var(--accent-blue);
+      color: #0d1117;
+      border: none;
+      border-radius: 8px;
+      padding: 0.75rem 1.5rem;
+      font-size: 0.9rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: opacity 0.2s ease;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .btn:hover {
+      opacity: 0.9;
+    }
+
+    .btn-danger {
+      background: var(--accent-red);
+      color: #fff;
+    }
+
+    .btn-secondary {
+      background: rgba(255, 255, 255, 0.1);
+      color: var(--text-main);
+      border: 1px solid var(--border-color);
+    }
+
+    .alert {
+      padding: 0.85rem 1rem;
+      border-radius: 8px;
+      font-size: 0.85rem;
       line-height: 1.5;
+      margin-bottom: 1.25rem;
+      display: none;
+    }
+
+    .alert-error {
+      background: rgba(248, 81, 73, 0.12);
+      border: 1px solid rgba(248, 81, 73, 0.3);
+      color: #ff7b72;
+    }
+
+    .alert-success {
+      background: rgba(63, 185, 80, 0.12);
+      border: 1px solid rgba(63, 185, 80, 0.3);
+      color: #56d364;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 1rem;
+      font-size: 0.85rem;
+    }
+
+    th, td {
+      padding: 0.75rem 1rem;
+      text-align: left;
+      border-bottom: 1px solid var(--border-color);
+    }
+
+    th {
+      color: var(--text-muted);
+      font-weight: 600;
+      text-transform: uppercase;
+      font-size: 0.75rem;
     }
 
     .footer {
@@ -118,26 +247,533 @@
       font-size: 0.78rem;
       color: var(--text-muted);
     }
+
+    .hidden { display: none !important; }
   </style>
 </head>
 <body>
   <div class="container">
     <div class="card">
       <div class="header-badge">
-        <span class="status-dot"></span> Sesión Autenticada · Nginx Gateway
+        <span class="status-dot"></span> Intranet Autenticada · Nginx Gateway
       </div>
       <h1>Intranet Privada — Política Canon</h1>
       <p class="subtitle">
-        Portal de gobernanza, autorización colegiada y trazabilidad de auditoría inmutable.
+        Portal de gobernanza, autorización colegiada y trazabilidad de auditoría inmutable (v0.3.18).
       </p>
 
-      <div class="notice-box">
-        <strong>Acceso Restringido:</strong> Ha accedido satisfactoriamente a través de la pasarela de autenticación. Las operaciones realizadas en este portal están sujetas a la matriz de permisos RLS e inmutabilidad de registros.
+      <!-- Mensaje Global de Alerta -->
+      <div id="global-alert-error" class="alert alert-error"></div>
+      <div id="global-alert-success" class="alert alert-success"></div>
+
+      <!-- Barra de Navegación de Sesión -->
+      <div id="nav-bar" class="nav-bar hidden">
+        <button class="nav-btn active" onclick="switchView('profile')">Mi Perfil</button>
+        <button class="nav-btn" onclick="switchView('sessions')">Sesiones Activas</button>
+        <button class="nav-btn" onclick="switchView('mfa')">Configurar MFA</button>
+        <button id="nav-invitations" class="nav-btn hidden" onclick="switchView('invitations')">Invitaciones</button>
+        <button id="nav-users" class="nav-btn hidden" onclick="switchView('users')">Usuarios</button>
+        <button class="nav-btn" onclick="handleLogout()" style="margin-left: auto; color: var(--accent-red);">Cerrar Sesión</button>
       </div>
+
+      <!-- VISTA 0: INICIO DE SESIÓN -->
+      <div id="view-login">
+        <h2 style="font-size: 1.2rem; margin-bottom: 1rem;">Acceso de Usuario</h2>
+        <form onsubmit="handleLogin(event)">
+          <div class="form-group">
+            <label for="login-email">Correo Electrónico</label>
+            <input type="email" id="login-email" required placeholder="usuario@ejemplo.com">
+          </div>
+          <div class="form-group">
+            <label for="login-password">Contraseña</label>
+            <input type="password" id="login-password" required placeholder="••••••••••••">
+          </div>
+          <button type="submit" class="btn">Iniciar Sesión</button>
+        </form>
+      </div>
+
+      <!-- VISTA 1: ACEPTACIÓN DE INVITACIÓN PRIVADA -->
+      <div id="view-accept-invitation" class="hidden">
+        <h2 style="font-size: 1.2rem; margin-bottom: 1rem;">Activar Cuenta mediante Invitación Privada</h2>
+        <form onsubmit="handleAcceptInvitation(event)">
+          <div class="form-group">
+            <label for="accept-token">Token de Invitación</label>
+            <input type="text" id="accept-token" required readonly>
+          </div>
+          <div class="form-group">
+            <label for="accept-name">Nombre Completo</label>
+            <input type="text" id="accept-name" required placeholder="Ej: María García">
+          </div>
+          <div class="form-group">
+            <label for="accept-password">Definir Contraseña (Mín. 12 caracteres, Mayúscula, Minúscula, Número y Especial)</label>
+            <input type="password" id="accept-password" required placeholder="••••••••••••">
+          </div>
+          <button type="submit" class="btn">Activar Cuenta e Iniciar Sesión</button>
+        </form>
+      </div>
+
+      <!-- VISTA 2: ENROLAMIENTO Y VERIFICACIÓN MFA TOTP -->
+      <div id="view-mfa" class="hidden">
+        <h2 style="font-size: 1.2rem; margin-bottom: 1rem;">Autenticación de Doble Factor (MFA TOTP)</h2>
+        <div id="mfa-unconfigured">
+          <p style="font-size: 0.9rem; color: var(--text-muted); margin-bottom: 1rem;">
+            Proteja su cuenta configurando un autenticador TOTP (Google Authenticator, Authy, etc.).
+          </p>
+          <button class="btn" onclick="initMfaSetup()">Iniciar Configuración MFA</button>
+          
+          <div id="mfa-setup-box" class="hidden" style="margin-top: 1.5rem; background: var(--card-inner-bg); padding: 1.25rem; border-radius: 8px;">
+            <p style="font-size: 0.85rem; margin-bottom: 0.5rem;">Escanee la clave en su aplicación de autenticación:</p>
+            <code id="mfa-secret-code" style="display: block; font-size: 1.1rem; color: var(--accent-blue); margin-bottom: 1rem; letter-spacing: 0.1em;"></code>
+            <form onsubmit="handleConfirmMfa(event)">
+              <div class="form-group">
+                <label for="mfa-confirm-code">Código de 6 dígitos</label>
+                <input type="text" id="mfa-confirm-code" maxlength="6" pattern="\d{6}" required placeholder="123456">
+              </div>
+              <button type="submit" class="btn">Confirmar Enrolamiento MFA</button>
+            </form>
+          </div>
+        </div>
+
+        <div id="mfa-configured" class="hidden">
+          <p style="font-size: 0.9rem; color: var(--accent-emerald); margin-bottom: 1rem;">
+            ✓ MFA TOTP está activo en esta cuenta.
+          </p>
+          <form onsubmit="handleMfaStepUp(event)" style="margin-bottom: 1.5rem;">
+            <div class="form-group">
+              <label for="mfa-stepup-code">Renovar Verificación Reciente (Step-Up <15 min)</label>
+              <input type="text" id="mfa-stepup-code" required placeholder="Código TOTP o de respaldo">
+            </div>
+            <button type="submit" class="btn">Verificar Ahora</button>
+          </form>
+        </div>
+      </div>
+
+      <!-- VISTA 3: PERFIL DE USUARIO Y CAMBIO DE CONTRASEÑA -->
+      <div id="view-profile" class="hidden">
+        <h2 style="font-size: 1.2rem; margin-bottom: 1rem;">Perfil del Usuario</h2>
+        <div style="background: var(--card-inner-bg); padding: 1rem; border-radius: 8px; margin-bottom: 1.5rem;">
+          <p><strong>Email:</strong> <span id="profile-email">-</span></p>
+          <p style="margin-top: 0.5rem;"><strong>Nombre:</strong> <span id="profile-name">-</span></p>
+          <p style="margin-top: 0.5rem;"><strong>Roles Activos:</strong> <span id="profile-roles" style="color: var(--accent-blue);">-</span></p>
+        </div>
+
+        <h3 style="font-size: 1rem; margin-bottom: 1rem;">Cambiar Contraseña</h3>
+        <form onsubmit="handleChangePassword(event)">
+          <div class="form-group">
+            <label for="change-current">Contraseña Actual</label>
+            <input type="password" id="change-current" required>
+          </div>
+          <div class="form-group">
+            <label for="change-new">Nueva Contraseña</label>
+            <input type="password" id="change-new" required>
+          </div>
+          <button type="submit" class="btn">Actualizar Contraseña</button>
+        </form>
+      </div>
+
+      <!-- VISTA 4: GESTIÓN DE SESIONES ACTIVAS -->
+      <div id="view-sessions" class="hidden">
+        <h2 style="font-size: 1.2rem; margin-bottom: 1rem;">Sesiones Activas</h2>
+        <button class="btn btn-secondary" onclick="handleLogoutAll()" style="margin-bottom: 1rem;">Cerrar Todas las Demás Sesiones</button>
+        <table>
+          <thead>
+            <tr>
+              <th>IP</th>
+              <th>Dispositivo / User-Agent</th>
+              <th>Creación</th>
+              <th>Acción</th>
+            </tr>
+          </thead>
+          <tbody id="sessions-list-body"></tbody>
+        </table>
+      </div>
+
+      <!-- VISTA 5: GESTIÓN DE INVITACIONES (ADMIN / COORDINATOR) -->
+      <div id="view-invitations" class="hidden">
+        <h2 style="font-size: 1.2rem; margin-bottom: 1rem;">Emitir Invitación Privada</h2>
+        <form onsubmit="handleCreateInvitation(event)" style="margin-bottom: 1.5rem;">
+          <div class="form-group">
+            <label for="inv-email">Correo Electrónico del Destinatario</label>
+            <input type="email" id="inv-email" required placeholder="nuevo.usuario@ejemplo.com">
+          </div>
+          <div class="form-group">
+            <label for="inv-role">Rol Asignado</label>
+            <select id="inv-role">
+              <option value="WRITER">WRITER (Redactor)</option>
+              <option value="REVIEWER">REVIEWER (Revisor)</option>
+              <option value="COORDINATOR">COORDINATOR (Coordinador)</option>
+            </select>
+          </div>
+          <button type="submit" class="btn">Enviar Invitación por Correo</button>
+        </form>
+
+        <h3 style="font-size: 1rem; margin-bottom: 1rem;">Invitaciones Pendientes</h3>
+        <table>
+          <thead>
+            <tr>
+              <th>Email</th>
+              <th>Rol</th>
+              <th>Expiración</th>
+              <th>Acción</th>
+            </tr>
+          </thead>
+          <tbody id="invitations-list-body"></tbody>
+        </table>
+      </div>
+
+      <!-- VISTA 6: GESTIÓN DE USUARIOS Y MEMBRESÍAS (ADMIN / COORDINATOR) -->
+      <div id="view-users" class="hidden">
+        <h2 style="font-size: 1.2rem; margin-bottom: 1rem;">Usuarios de la Organización</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>Email</th>
+              <th>Nombre</th>
+              <th>Estado</th>
+              <th>MFA</th>
+              <th>Acción</th>
+            </tr>
+          </thead>
+          <tbody id="users-list-body"></tbody>
+        </table>
+      </div>
+
     </div>
     <div class="footer">
-      Política Canon v0.3.14 — Sistema Canónico de Gobernanza y Auditoría
+      Política Canon v0.3.18 — Sistema Canónico de Gobernanza y Auditoría Inmutable
     </div>
   </div>
+
+  <script>
+    let currentUser = null;
+    let csrfToken = '';
+
+    function getCookie(name) {
+      const match = document.cookie.match(new RegExp('(^| )' + name + '=([^;]+)'));
+      return match ? match[2] : '';
+    }
+
+    function getCsrfToken() {
+      return csrfToken || getCookie('csrf');
+    }
+
+    function showError(msg) {
+      const err = document.getElementById('global-alert-error');
+      err.innerText = msg;
+      err.style.display = 'block';
+      document.getElementById('global-alert-success').style.display = 'none';
+    }
+
+    function showSuccess(msg) {
+      const succ = document.getElementById('global-alert-success');
+      succ.innerText = msg;
+      succ.style.display = 'block';
+      document.getElementById('global-alert-error').style.display = 'none';
+    }
+
+    function hideAlerts() {
+      document.getElementById('global-alert-error').style.display = 'none';
+      document.getElementById('global-alert-success').style.display = 'none';
+    }
+
+    function switchView(viewName) {
+      hideAlerts();
+      const views = ['login', 'accept-invitation', 'mfa', 'profile', 'sessions', 'invitations', 'users'];
+      views.forEach(v => {
+        const el = document.getElementById(`view-${v}`);
+        if (el) el.classList.add('hidden');
+      });
+
+      const activeEl = document.getElementById(`view-${viewName}`);
+      if (activeEl) activeEl.classList.remove('hidden');
+
+      if (viewName === 'sessions') loadSessions();
+      if (viewName === 'invitations') loadInvitations();
+      if (viewName === 'users') loadUsers();
+    }
+
+    async function apiRequest(url, options = {}) {
+      options.headers = options.headers || {};
+      options.headers['Content-Type'] = 'application/json';
+      const csrf = getCsrfToken();
+      if (csrf && !['GET', 'HEAD'].includes((options.method || 'GET').toUpperCase())) {
+        options.headers['x-csrf-token'] = csrf;
+      }
+
+      const res = await fetch(url, options);
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data.error || 'Error en la petición.');
+      }
+      return data;
+    }
+
+    async function checkAuthStatus() {
+      try {
+        const data = await apiRequest('/api/v1/auth/me');
+        currentUser = data.user;
+        document.getElementById('profile-email').innerText = data.user.email;
+        document.getElementById('profile-name').innerText = data.user.fullName;
+        document.getElementById('profile-roles').innerText = data.authContext.roles.join(', ') || 'Ninguno';
+
+        document.getElementById('nav-bar').classList.remove('hidden');
+        document.getElementById('view-login').classList.add('hidden');
+
+        const isGovernance = data.authContext.roles.includes('ADMIN') || data.authContext.roles.includes('COORDINATOR');
+        if (isGovernance) {
+          document.getElementById('nav-invitations').classList.remove('hidden');
+          document.getElementById('nav-users').classList.remove('hidden');
+        }
+
+        if (data.user.mfaEnabled) {
+          document.getElementById('mfa-unconfigured').classList.add('hidden');
+          document.getElementById('mfa-configured').classList.remove('hidden');
+        }
+
+        switchView('profile');
+      } catch {
+        // No autenticado
+        document.getElementById('nav-bar').classList.add('hidden');
+        const urlParams = new URLSearchParams(window.location.search);
+        const token = urlParams.get('token');
+        if (token) {
+          document.getElementById('accept-token').value = token;
+          switchView('accept-invitation');
+        } else {
+          switchView('login');
+        }
+      }
+    }
+
+    async function handleLogin(e) {
+      e.preventDefault();
+      hideAlerts();
+      const email = document.getElementById('login-email').value;
+      const password = document.getElementById('login-password').value;
+
+      try {
+        const data = await apiRequest('/api/v1/auth/login', {
+          method: 'POST',
+          body: JSON.stringify({ email, password }),
+        });
+        csrfToken = data.csrfToken;
+        showSuccess('Autenticación exitosa.');
+        await checkAuthStatus();
+      } catch (err) {
+        showError(err.message);
+      }
+    }
+
+    async function handleAcceptInvitation(e) {
+      e.preventDefault();
+      hideAlerts();
+      const token = document.getElementById('accept-token').value;
+      const fullName = document.getElementById('accept-name').value;
+      const password = document.getElementById('accept-password').value;
+
+      try {
+        await apiRequest('/api/v1/invitations/accept', {
+          method: 'POST',
+          body: JSON.stringify({ token, fullName, password }),
+        });
+        showSuccess('Cuenta activada con éxito. Iniciando sesión...');
+        document.getElementById('login-email').value = '';
+        document.getElementById('login-password').value = password;
+        switchView('login');
+      } catch (err) {
+        showError(err.message);
+      }
+    }
+
+    async function handleLogout() {
+      try {
+        await apiRequest('/api/v1/auth/logout', { method: 'POST' });
+      } catch {}
+      location.reload();
+    }
+
+    async function handleLogoutAll() {
+      try {
+        await apiRequest('/api/v1/auth/logout-all', { method: 'POST' });
+        showSuccess('Todas las demás sesiones han sido revocadas.');
+        loadSessions();
+      } catch (err) {
+        showError(err.message);
+      }
+    }
+
+    async function loadSessions() {
+      try {
+        const data = await apiRequest('/api/v1/sessions');
+        const tbody = document.getElementById('sessions-list-body');
+        tbody.innerHTML = data.sessions.map(s => `
+          <tr>
+            <td>${s.ipAddress}</td>
+            <td style="max-width: 250px; overflow: hidden; text-overflow: ellipsis;">${s.userAgent}</td>
+            <td>${new Date(s.createdAt).toLocaleString()}</td>
+            <td>
+              ${s.isCurrent ? '<span style="color: var(--accent-emerald);">Actual</span>' : `<button class="btn btn-danger" style="padding: 0.3rem 0.6rem; font-size: 0.75rem;" onclick="revokeSession('${s.id}')">Revocar</button>`}
+            </td>
+          </tr>
+        `).join('');
+      } catch (err) {
+        showError(err.message);
+      }
+    }
+
+    async function revokeSession(id) {
+      try {
+        await apiRequest(`/api/v1/sessions/${id}`, { method: 'DELETE' });
+        showSuccess('Sesión revocada exitosamente.');
+        loadSessions();
+      } catch (err) {
+        showError(err.message);
+      }
+    }
+
+    async function initMfaSetup() {
+      try {
+        const data = await apiRequest('/api/v1/auth/mfa/setup', { method: 'POST' });
+        document.getElementById('mfa-secret-code').innerText = data.secret;
+        document.getElementById('mfa-setup-box').classList.remove('hidden');
+      } catch (err) {
+        showError(err.message);
+      }
+    }
+
+    async function handleConfirmMfa(e) {
+      e.preventDefault();
+      hideAlerts();
+      const code = document.getElementById('mfa-confirm-code').value;
+
+      try {
+        const data = await apiRequest('/api/v1/auth/mfa/confirm', {
+          method: 'POST',
+          body: JSON.stringify({ code }),
+        });
+        showSuccess(`MFA activado exitosamente. Códigos de respaldo: ${data.backupCodes.join(', ')}`);
+        await checkAuthStatus();
+      } catch (err) {
+        showError(err.message);
+      }
+    }
+
+    async function handleMfaStepUp(e) {
+      e.preventDefault();
+      hideAlerts();
+      const code = document.getElementById('mfa-stepup-code').value;
+      try {
+        await apiRequest('/api/v1/auth/mfa/verify', {
+          method: 'POST',
+          body: JSON.stringify({ code }),
+        });
+        showSuccess('Verificación MFA actualizada correctamente (<15 min).');
+      } catch (err) {
+        showError(err.message);
+      }
+    }
+
+    async function handleChangePassword(e) {
+      e.preventDefault();
+      hideAlerts();
+      const currentPassword = document.getElementById('change-current').value;
+      const newPassword = document.getElementById('change-new').value;
+
+      try {
+        await apiRequest('/api/v1/auth/change-password', {
+          method: 'POST',
+          body: JSON.stringify({ currentPassword, newPassword }),
+        });
+        showSuccess('Contraseña actualizada correctamente.');
+      } catch (err) {
+        showError(err.message);
+      }
+    }
+
+    async function loadInvitations() {
+      try {
+        const data = await apiRequest('/api/v1/invitations');
+        const tbody = document.getElementById('invitations-list-body');
+        tbody.innerHTML = data.invitations.map(i => `
+          <tr>
+            <td>${i.email}</td>
+            <td>${i.role}</td>
+            <td>${new Date(i.expiresAt).toLocaleString()}</td>
+            <td>
+              <button class="btn btn-danger" style="padding: 0.3rem 0.6rem; font-size: 0.75rem;" onclick="revokeInvitation('${i.id}')">Revocar</button>
+            </td>
+          </tr>
+        `).join('');
+      } catch (err) {
+        showError(err.message);
+      }
+    }
+
+    async function handleCreateInvitation(e) {
+      e.preventDefault();
+      hideAlerts();
+      const email = document.getElementById('inv-email').value;
+      const role = document.getElementById('inv-role').value;
+
+      try {
+        await apiRequest('/api/v1/invitations', {
+          method: 'POST',
+          body: JSON.stringify({ email, role }),
+        });
+        showSuccess('Invitación enviada por correo electrónico.');
+        document.getElementById('inv-email').value = '';
+        loadInvitations();
+      } catch (err) {
+        showError(err.message);
+      }
+    }
+
+    async function revokeInvitation(id) {
+      try {
+        await apiRequest(`/api/v1/invitations/${id}`, { method: 'DELETE' });
+        showSuccess('Invitación revocada.');
+        loadInvitations();
+      } catch (err) {
+        showError(err.message);
+      }
+    }
+
+    async function loadUsers() {
+      try {
+        const data = await apiRequest('/api/v1/users');
+        const tbody = document.getElementById('users-list-body');
+        tbody.innerHTML = data.users.map(u => `
+          <tr>
+            <td>${u.email}</td>
+            <td>${u.fullName}</td>
+            <td>${u.isActive ? '<span style="color: var(--accent-emerald);">Activo</span>' : '<span style="color: var(--accent-red);">Inactivo</span>'}</td>
+            <td>${u.mfaEnabled ? 'Sí' : 'No'}</td>
+            <td>
+              <button class="btn ${u.isActive ? 'btn-danger' : ''}" style="padding: 0.3rem 0.6rem; font-size: 0.75rem;" onclick="toggleUserStatus('${u.id}', ${!u.isActive})">
+                ${u.isActive ? 'Desactivar' : 'Activar'}
+              </button>
+            </td>
+          </tr>
+        `).join('');
+      } catch (err) {
+        showError(err.message);
+      }
+    }
+
+    async function toggleUserStatus(id, isActive) {
+      try {
+        await apiRequest(`/api/v1/users/${id}/status`, {
+          method: 'PATCH',
+          body: JSON.stringify({ isActive }),
+        });
+        showSuccess('Estado de cuenta actualizado.');
+        loadUsers();
+      } catch (err) {
+        showError(err.message);
+      }
+    }
+
+    window.onload = checkAuthStatus;
+  </script>
 </body>
 </html>

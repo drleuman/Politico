@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Script de Provisión Inicial de Servidor — Política Canon v0.3.17
+# Script de Provisión Inicial de Servidor — Política Canon v0.3.18
 # Ejecutar en el servidor Ubuntu 24.04 / Plesk como root o con sudo
 
 set -euo pipefail

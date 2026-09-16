@@ -12,7 +12,8 @@ export const redisClient = new Redis(config.redisUrl, {
 });
 
 redisClient.on('error', (err) => {
-  // Silent error logger to prevent unhandled error crashes during liveness probing
+  const sanitizedMsg = err.message ? err.message.replace(/redis:\/\/.*@/, 'redis://****@') : 'Redis connection error';
+  // Log sanitized error message without credentials
 });
 
 export async function checkRedisHealth(): Promise<{ ok: boolean; error?: string }> {
@@ -26,6 +27,18 @@ export async function checkRedisHealth(): Promise<{ ok: boolean; error?: string 
     }
     return { ok: false, error: `Unexpected ping response: ${pong}` };
   } catch (err: any) {
-    return { ok: false, error: err.message || 'Redis ping failed' };
+    const sanitized = err.message ? err.message.replace(/redis:\/\/.*@/, 'redis://****@') : 'Redis ping failed';
+    return { ok: false, error: sanitized };
   }
 }
+
+export async function closeRedisClient(): Promise<void> {
+  try {
+    if (redisClient.status !== 'end') {
+      await redisClient.quit();
+    }
+  } catch (err: any) {
+    redisClient.disconnect();
+  }
+}
+

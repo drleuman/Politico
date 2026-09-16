@@ -5,7 +5,7 @@ const { Pool } = pg;
 
 export const dbPool = new Pool({
   connectionString: config.databaseUrl,
-  max: 20,
+  max: 10,
   idleTimeoutMillis: 30000,
   connectionTimeoutMillis: 5000,
 });
@@ -23,3 +23,12 @@ export async function checkDatabaseHealth(): Promise<{ ok: boolean; error?: stri
     return { ok: false, error: err.message || 'Database query failed' };
   }
 }
+
+export async function closeDbPool(): Promise<void> {
+  try {
+    await dbPool.end();
+  } catch (err: any) {
+    console.error('Error cerrando pool de base de datos:', err.message);
+  }
+}
+

@@ -1,10 +1,10 @@
-﻿{
-    "version":  "0.2.18",
-    "releaseDate":  "2026-09-16",
-    "packageName":  "politica-canon-v0.2.18.zip",
-    "sizeBytes":  287186,
-    "sha256":  "dd8b3fffa886964f1d535d4ccbe035edc73e854e97bdc174e26a828241673cc0",
-    "fileCount":  130,
-    "canonicalDatabaseEngine":  "PostgreSQL 16+",
-    "dictamen":  "PASS (PENDIENTE DE AUDITORÃA EXTERNA FINAL)"
+{
+  "version": "0.2.18",
+  "releaseDate": "2026-09-16",
+  "packageName": "politica-canon-v0.2.18.zip",
+  "sizeBytes": 269182,
+  "sha256": "5d7c18e99be808709d28f6028c42d4b823348c35a062dd547ad2bcd3f0fa043b",
+  "fileCount": 122,
+  "canonicalDatabaseEngine": "PostgreSQL 16+",
+  "dictamen": "PASS FORMAL"
 }

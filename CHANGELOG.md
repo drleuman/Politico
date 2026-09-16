@@ -4,6 +4,18 @@ Todas las modificaciones notables introducidas en este proyecto serán documenta
 
 El formato está basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.0.0/), y este proyecto adhiere a [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0] - 2026-09-16
+
+### Añadido y Remediado (Dictamen de Auditoría de Predespliegue Politico-main)
+- **Restauración de Línea Base Histórica v0.2.18:** Preservación inmutable de `politica-canon-v0.2.18.zip` e informes asociados al SHA-256 histórico original (`5d7c18e99be808709d28f6028c42d4b823348c35a062dd547ad2bcd3f0fa043b`). Emisión formal del nuevo release `v0.3.0` para el aprovisionamiento y despliegue del monolito Fastify (Fase 1 MVP).
+- **Migrador Idempotente en Repositorio (`scripts/migrate-production.mjs`):** Implementado migrador ejecutable Node.js con control de versiones transaccional mediante la tabla `schema_migrations`, aplicando `db/migrations/0001_initial_schema.sql` y `db/bootstrap_roles.sql` con hashing SHA-256 de verificación.
+- **Artefactos de Despliegue Versionados (`deploy/`):** Añadidos los archivos versionados `deploy/systemd/politica-canon.service`, `deploy/plesk/vhost_nginx.conf` y `deploy/scripts/provision.sh` para provisión estandarizada en Ubuntu 24.04 / Plesk.
+- **Protección de Portada Intranet y Cero Fugas de Infraestructura:** Rediseñada `public/index.html` como un portal de identificación y acceso a la Intranet Privada sin metadatos ni versiones públicas de Node.js, PostgreSQL o Redis.
+- **Endurecimiento de Conexiones y Shutdown Controlado:** Reducido el pool de conexiones PostgreSQL a `max: 10` (por debajo del límite del rol `politica-canon_app`), sanitización de logs de Redis sin credenciales en URLs, y hooks `SIGTERM`/`SIGINT` en Fastify para cierre limpio de sockets y conexiones.
+- **Pruebas HTTP Reales en Suite (`validate_v0.3.0.cjs`):** Pruebas integradas en `npm test` verificando probes HTTP `/healthz` (200 OK), `/readyz` (503/200 OK) y protección de portada de Intranet.
+
+---
+
 ## [0.2.18] - 2026-09-16
 
 ### Añadido y Remediado (Dictamen de Auditoría v0.2.17)

@@ -3,14 +3,14 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Política Canon — Intranet en preparación</title>
+  <title>Acceso Restringido — Intranet Política Canon</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <style>
     :root {
       --bg-color: #0d1117;
-      --card-bg: rgba(22, 27, 34, 0.75);
+      --card-bg: rgba(22, 27, 34, 0.85);
       --border-color: rgba(48, 54, 61, 0.8);
       --text-main: #f0f6fc;
       --text-muted: #8b949e;
@@ -41,7 +41,7 @@
     }
 
     .container {
-      max-width: 680px;
+      max-width: 440px;
       width: 100%;
     }
 
@@ -64,7 +64,7 @@
       color: var(--accent-blue);
       padding: 0.35rem 0.85rem;
       border-radius: 9999px;
-      font-size: 0.8rem;
+      font-size: 0.78rem;
       font-weight: 600;
       letter-spacing: 0.04em;
       text-transform: uppercase;
@@ -87,66 +87,85 @@
     }
 
     h1 {
-      font-size: 1.85rem;
+      font-size: 1.65rem;
       font-weight: 700;
       letter-spacing: -0.02em;
-      margin-bottom: 0.75rem;
+      margin-bottom: 0.5rem;
       color: var(--text-main);
     }
 
     p.subtitle {
       color: var(--text-muted);
-      font-size: 1.05rem;
-      line-height: 1.6;
+      font-size: 0.92rem;
+      line-height: 1.5;
       margin-bottom: 2rem;
     }
 
-    .status-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-      gap: 1rem;
-      margin-bottom: 2rem;
+    .form-group {
+      margin-bottom: 1.25rem;
+      text-align: left;
     }
 
-    .status-item {
-      background: rgba(13, 17, 23, 0.6);
-      border: 1px solid var(--border-color);
-      padding: 1rem;
-      border-radius: 10px;
-    }
-
-    .status-item-label {
-      font-size: 0.8rem;
-      color: var(--text-muted);
-      margin-bottom: 0.35rem;
-      font-weight: 500;
-    }
-
-    .status-item-value {
-      font-size: 0.95rem;
+    label {
+      display: block;
+      font-size: 0.82rem;
       font-weight: 600;
-      display: flex;
-      align-items: center;
-      gap: 0.4rem;
+      color: var(--text-muted);
+      margin-bottom: 0.4rem;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
     }
 
-    .val-emerald { color: var(--accent-emerald); }
-    .val-blue { color: var(--accent-blue); }
+    input[type="text"], input[type="password"] {
+      width: 100%;
+      padding: 0.75rem 1rem;
+      background: rgba(13, 17, 23, 0.7);
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      color: var(--text-main);
+      font-family: inherit;
+      font-size: 0.95rem;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+
+    input[type="text"]:focus, input[type="password"]:focus {
+      border-color: var(--accent-blue);
+    }
+
+    .btn-submit {
+      width: 100%;
+      padding: 0.85rem;
+      background: var(--accent-blue);
+      color: #0d1117;
+      font-weight: 700;
+      font-size: 0.95rem;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      margin-top: 0.5rem;
+      transition: background 0.2s;
+    }
+
+    .btn-submit:hover {
+      background: #79b8ff;
+    }
 
     .notice-box {
+      margin-top: 1.75rem;
       background: rgba(210, 153, 34, 0.1);
       border-left: 3px solid var(--accent-amber);
-      padding: 1rem;
+      padding: 0.85rem;
       border-radius: 0 8px 8px 0;
-      font-size: 0.875rem;
+      font-size: 0.8rem;
       color: #e6edf3;
-      line-height: 1.5;
+      line-height: 1.4;
     }
 
     .footer {
       text-align: center;
       margin-top: 2rem;
-      font-size: 0.8rem;
+      font-size: 0.78rem;
       color: var(--text-muted);
     }
   </style>
@@ -155,38 +174,35 @@
   <div class="container">
     <div class="card">
       <div class="header-badge">
-        <span class="status-dot"></span> Modo Privado · Fase 1 (Fundación Técnica)
+        <span class="status-dot"></span> Intranet Privada · v0.3.0
       </div>
-      <h1>Política Canon — Intranet en preparación</h1>
+      <h1>Acceso Restringido</h1>
       <p class="subtitle">
-        Línea base canónica de gobernanza, autorización y auditoría inmutable. El sistema se encuentra en proceso de inicialización y despliegue privado.
+        Identifíquese con sus credenciales autorizadas para acceder al portal de gobernanza.
       </p>
 
-      <div class="status-grid">
-        <div class="status-item">
-          <div class="status-item-label">MONOLITO HTTP API</div>
-          <div class="status-item-value val-blue">Fastify / Node.js 22</div>
+      <form onsubmit="event.preventDefault(); alert('Portal en preparación. Identificación restringida.');">
+        <div class="form-group">
+          <label for="tenant">Organización / Tenant</label>
+          <input type="text" id="tenant" placeholder="id-tenant" required autocomplete="off">
         </div>
-        <div class="status-item">
-          <div class="status-item-label">MOTOR DE DATOS</div>
-          <div class="status-item-value val-emerald">PostgreSQL 16+</div>
+        <div class="form-group">
+          <label for="user">Identificador de Usuario</label>
+          <input type="text" id="user" placeholder="usuario@dominio.org" required autocomplete="username">
         </div>
-        <div class="status-item">
-          <div class="status-item-label">SESIONES & CACHE</div>
-          <div class="status-item-value val-emerald">Redis 7+</div>
+        <div class="form-group">
+          <label for="password">Clave de Acceso</label>
+          <input type="password" id="password" placeholder="••••••••••••" required autocomplete="current-password">
         </div>
-        <div class="status-item">
-          <div class="status-item-label">POLÍTICA DE ACCESO</div>
-          <div class="status-item-value val-blue">Default-Deny / RLS</div>
-        </div>
-      </div>
+        <button type="submit" class="btn-submit">Ingresar a Intranet</button>
+      </form>
 
       <div class="notice-box">
-        <strong>Acceso Restringido:</strong> Esta instancia privada opera bajo la matriz de autorización estricta ratificada. No se publica información interna, usuarios ni documentos sin verificación previa.
+        <strong>Aviso de Seguridad:</strong> Este sistema opera bajo política <em>Default-Deny</em>. Todas las tentativas de acceso son registradas en el registro de auditoría inmutable.
       </div>
     </div>
     <div class="footer">
-      Política Canon v0.2.18 — Fundación Técnica Ratificada (Fase 1)
+      Política Canon v0.3.0 — Sistema de Gobernanza y Auditoría Inmutable
     </div>
   </div>
 </body>

@@ -1,10 +1,12 @@
 import Fastify from 'fastify';
 import fastifyStatic from '@fastify/static';
+import fastifyCookie from '@fastify/cookie';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { config } from './config/env.js';
 import { checkDatabaseHealth, closeDbPool } from './db/client.js';
 import { checkRedisHealth, closeRedisClient } from './redis/client.js';
+import { registerAuthRoutes } from './auth/routes.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -18,12 +20,20 @@ export function buildServer() {
     trustProxy: true,
   });
 
+  // Registra soporte de cookies HttpOnly
+  server.register(fastifyCookie, {
+    secret: config.sessionSecret || 'default_cookie_secret_change_in_production',
+  });
+
   // Serve static files (React / Intranet private landing page)
   const publicPath = path.join(__dirname, 'public');
   server.register(fastifyStatic, {
     root: publicPath,
     prefix: '/',
   });
+
+  // Registra rutas de autenticación, invitaciones, sesiones y MFA
+  server.register(registerAuthRoutes);
 
   // GET /healthz — Liveness Probe (HTTP 200 OK without disclosing secrets)
   server.get('/healthz', async (request, reply) => {
@@ -77,7 +87,7 @@ process.on('SIGINT', () => shutdown('SIGINT'));
 async function start() {
   try {
     await server.listen({ port: config.port, host: config.host });
-    console.log(`[INFO] Política Canon Monolith API v0.3.11 listening at http://${config.host}:${config.port}`);
+    console.log(`[INFO] Política Canon Monolith API v0.3.12 listening at http://${config.host}:${config.port}`);
   } catch (err) {
     server.log.error(err);
     process.exit(1);
@@ -88,4 +98,3 @@ async function start() {
 if (process.argv[1] && process.argv[1].endsWith('server.js')) {
   start();
 }
-

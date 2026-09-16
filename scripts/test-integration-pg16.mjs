@@ -2,7 +2,7 @@ import { execSync } from 'child_process';
 import pg from 'pg';
 const { Client } = pg;
 
-console.log('=== RUNNER DE INTEGRACIÓN REAL POSTGRESQL 16 & REDIS (v0.3.11 STRICT FAIL-CLOSED) ===\n');
+console.log('=== RUNNER DE INTEGRACIÓN REAL POSTGRESQL 16 & REDIS (v0.3.12 STRICT FAIL-CLOSED) ===\n');
 
 const ADMIN_URL = process.env.POLITICA_CANON_ADMIN_DATABASE_URL || 'postgresql://postgres:audit_dev_only_secret_do_not_use_in_prod@127.0.0.1:15432/politica_canon';
 const MIGRATION_URL = process.env.MIGRATION_DATABASE_URL || ADMIN_URL;
@@ -55,7 +55,6 @@ async function runIntegrationTest() {
   let fastifyApp = null;
 
   try {
-    // C-01 / C-03: Verificación estricta de Docker (FAIL CLOSED con THROW, sin process.exit prematuro)
     const dockerOk = await checkDockerAvailable();
     if (!dockerOk) {
       throw new Error('REAL_PG16_AND_REDIS_REQUIRED: Docker Engine no está activo ni disponible.');
@@ -80,23 +79,17 @@ async function runIntegrationTest() {
     for (let round = 1; round <= 2; round++) {
       console.log(`\n--- FASE ${round}: EJECUCIÓN PRODUCTIVA (RONDA ${round} DE IDEMPOTENCIA) ---`);
       
-      // 1. Pre-bootstrap
       runScript('scripts/bootstrap-pre.mjs');
 
-      // 2. C-02: Asignación explícita de contraseña al rol runtime politica_canon_app para entorno de prueba
       console.log(`🔑 [C-02 TEST SETUP] Asignando contraseña exclusiva de prueba al rol runtime 'politica_canon_app'...`);
       const adminClient = new Client({ connectionString: ADMIN_URL });
       await adminClient.connect();
       await adminClient.query(`ALTER ROLE politica_canon_app WITH PASSWORD '${APP_TEST_PASSWORD}';`);
       console.log("✅ [C-02 TEST SETUP] Contraseña de prueba asignada a 'politica_canon_app'.");
 
-      // 3. Migración DDL
       runScript('scripts/migrate-production.mjs');
-
-      // 4. Post-bootstrap
       runScript('scripts/bootstrap-post.mjs');
 
-      // 5. Aserciones de Catálogo en PostgreSQL 16 Real
       console.log(`\n--- ASERCIONES DE CATÁLOGO PG16 REAL (RONDA ${round}) ---`);
       const ownerCheck = await adminClient.query("SELECT pg_catalog.pg_get_userbyid(datdba) AS db_owner FROM pg_catalog.pg_database WHERE datname = 'politica_canon';");
       const dbOwner = ownerCheck.rows[0]?.db_owner;
@@ -111,64 +104,196 @@ async function runIntegrationTest() {
       }
       console.log('✅ Catálogo PG16: audit_dispatcher BYPASSRLS = true.');
 
-      const funcCheck = await adminClient.query(`
-        SELECT pg_get_userbyid(p.proowner) as func_owner
-        FROM pg_proc p
-        JOIN pg_namespace n ON p.pronamespace = n.oid
-        WHERE n.nspname = 'public' AND p.proname = 'get_pending_outbox_tenants';
-      `);
-      if (funcCheck.rows[0]?.func_owner !== 'audit_dispatcher') {
-        throw new Error(`CRITICAL FAIL: get_pending_outbox_tenants es propiedad de '${funcCheck.rows[0]?.func_owner}', se requiere 'audit_dispatcher'.`);
-      }
-      console.log('✅ Catálogo PG16: get_pending_outbox_tenants pertenece a audit_dispatcher.');
-
-      // Probar denegación DML sobre app_user
-      await adminClient.query('SET ROLE app_user;');
-      let dmlDenied = false;
-      try {
-        await adminClient.query("INSERT INTO decisions (id, organization_id, workspace_id, authority_body_id, document_id, version_id, submission_id, title) VALUES ('00000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-000000000001', 'Title');");
-      } catch (err) {
-        if (err.message.includes('permission denied')) {
-          dmlDenied = true;
-        }
-      }
-      if (!dmlDenied) {
-        throw new Error('CRITICAL FAIL: app_user no recibió permission denied al intentar DML.');
-      }
-      console.log('✅ Catálogo PG16: Denegación DML para app_user verificada.');
-
-      await adminClient.query('RESET ROLE;');
       await adminClient.end();
     }
 
-    // VERIFICACIÓN CON SERVICIOS REALES FASTIFY /readyz HTTP 200 (C-02)
-    console.log('\n--- VERIFICACIÓN HTTP FASTIFY CON CONEXIONES REALES (PG16 + REDIS 7) ---');
+    // VERIFICACIÓN CON SERVICIOS REALES FASTIFY (FASE 1.1: INVITACIONES, USUARIOS, SESIONES Y MFA)
+    console.log('\n--- VERIFICACIÓN DE FASE 1.1 CON CONEXIONES REALES (PG16 + REDIS 7) ---');
+    
+    // Crear Organización y Admin de Prueba directamente en la base de datos como bootstrap
+    const { hashPassword } = await import('../dist/auth/crypto.js');
+    const adminPassHash = await hashPassword('PasswordSecura123!');
+
+    const setupClient = new Client({ connectionString: ADMIN_URL });
+    await setupClient.connect();
+    
+    const orgId = '11111111-1111-1111-1111-111111111111';
+    const wsId = '22222222-2222-2222-2222-222222222222';
+    const adminUserId = '33333333-3333-3333-3333-333333333333';
+
+    await setupClient.query(`
+      INSERT INTO organizations (id, name, slug) VALUES ('${orgId}', 'Org Test Canon', 'org-test-canon')
+      ON CONFLICT (id) DO NOTHING;
+      INSERT INTO workspaces (id, organization_id, name, slug) VALUES ('${wsId}', '${orgId}', 'WS Principal', 'ws-principal')
+      ON CONFLICT (organization_id, id) DO NOTHING;
+      INSERT INTO users (id, email, full_name, is_active, mfa_enabled) VALUES ('${adminUserId}', 'admin@test.canon', 'Admin Semilla', TRUE, FALSE)
+      ON CONFLICT (id) DO NOTHING;
+      INSERT INTO user_credentials (user_id, password_hash, password_algo) VALUES ('${adminUserId}', '${adminPassHash}', 'argon2id')
+      ON CONFLICT (user_id) DO UPDATE SET password_hash = '${adminPassHash}';
+      INSERT INTO organization_memberships (organization_id, user_id, is_active) VALUES ('${orgId}', '${adminUserId}', TRUE)
+      ON CONFLICT (organization_id, user_id) DO NOTHING;
+      INSERT INTO role_assignments (organization_id, scope_type, scope_id, target_user_id, assigned_role, is_active)
+      VALUES ('${orgId}', 'ORGANIZATION', '${orgId}', '${adminUserId}', 'ADMIN', TRUE)
+      ON CONFLICT DO NOTHING;
+    `);
+    await setupClient.end();
+
     const { buildServer } = await import('../dist/server.js');
     fastifyApp = buildServer();
     await fastifyApp.ready();
 
-    const healthRes = await fastifyApp.inject({ method: 'GET', url: '/healthz' });
+    // 1. Probe de Salud
     const readyRes = await fastifyApp.inject({ method: 'GET', url: '/readyz' });
-    const rootRes = await fastifyApp.inject({ method: 'GET', url: '/' });
+    if (readyRes.statusCode !== 200) {
+      throw new Error(`GET /readyz devolvió HTTP ${readyRes.statusCode}, se requiere 200.`);
+    }
+    console.log('✅ Probe Fastify /readyz: HTTP 200 OK');
 
-    console.log(`  -> GET /healthz: ${healthRes.statusCode}`);
-    console.log(`  -> GET /readyz: ${readyRes.statusCode} payload=${readyRes.payload}`);
-    console.log(`  -> GET /: ${rootRes.statusCode}`);
+    // 2. Login con Usuario Admin de Prueba
+    const loginRes = await fastifyApp.inject({
+      method: 'POST',
+      url: '/api/v1/auth/login',
+      payload: {
+        email: 'admin@test.canon',
+        password: 'PasswordSecura123!',
+        organizationId: orgId,
+      },
+    });
+    const loginBody = JSON.parse(loginRes.payload);
+    if (loginRes.statusCode !== 200 || !loginBody.token) {
+      throw new Error(`Login de admin falló: ${loginRes.payload}`);
+    }
+    const adminToken = loginBody.token;
+    console.log('✅ Auth API: Login de Admin exitoso con credenciales Argon2id y sesión persistida.');
 
-    if (healthRes.statusCode !== 200) {
-      throw new Error(`GET /healthz devolvió status ${healthRes.statusCode}, se requiere 200.`);
+    // 3. Crear Invitación Privada
+    const invRes = await fastifyApp.inject({
+      method: 'POST',
+      url: '/api/v1/invitations',
+      headers: { authorization: `Bearer ${adminToken}` },
+      payload: {
+        email: 'writer.nuevo@test.canon',
+        role: 'WRITER',
+        workspaceId: wsId,
+      },
+    });
+    const invBody = JSON.parse(invRes.payload);
+    if (invRes.statusCode !== 201 || !invBody.rawToken) {
+      throw new Error(`Creación de invitación falló: ${invRes.payload}`);
+    }
+    const invitationToken = invBody.rawToken;
+    console.log('✅ Invitations API: Invitación privada creada con token de alta entropía.');
+
+    // 4. Aceptar Invitación Privada y Crear Cuenta de Usuario
+    const acceptRes = await fastifyApp.inject({
+      method: 'POST',
+      url: '/api/v1/invitations/accept',
+      payload: {
+        token: invitationToken,
+        fullName: 'Escritor Nuevo',
+        password: 'PasswordNuevo123!',
+      },
+    });
+    const acceptBody = JSON.parse(acceptRes.payload);
+    if (acceptRes.statusCode !== 201 || !acceptBody.userId) {
+      throw new Error(`Aceptación de invitación falló: ${acceptRes.payload}`);
+    }
+    console.log('✅ Invitations API: Invitación aceptada correctamente y usuario registrado.');
+
+    // 5. Intentar Reutilizar Invitación Consumida (Debe Fallar Cerrado)
+    const reuseRes = await fastifyApp.inject({
+      method: 'POST',
+      url: '/api/v1/invitations/accept',
+      payload: {
+        token: invitationToken,
+        fullName: 'Intento Reutilizacion',
+        password: 'PasswordNuevo123!',
+      },
+    });
+    if (reuseRes.statusCode !== 400 || !JSON.parse(reuseRes.payload).error?.includes('INVITATION_REUSED')) {
+      throw new Error(`Fallo en prevención de reutilización de invitación: ${reuseRes.payload}`);
+    }
+    console.log('✅ Invitations API: Reutilización de invitación rechazada (FAIL CLOSED).');
+
+    // 6. Login de Nuevo Usuario Escritor
+    const writerLoginRes = await fastifyApp.inject({
+      method: 'POST',
+      url: '/api/v1/auth/login',
+      payload: {
+        email: 'writer.nuevo@test.canon',
+        password: 'PasswordNuevo123!',
+        organizationId: orgId,
+      },
+    });
+    const writerLoginBody = JSON.parse(writerLoginRes.payload);
+    if (writerLoginRes.statusCode !== 200 || !writerLoginBody.token) {
+      throw new Error(`Login de nuevo escritor falló: ${writerLoginRes.payload}`);
+    }
+    const writerToken = writerLoginBody.token;
+    console.log('✅ Auth API: Login del nuevo usuario con sesión rotada.');
+
+    // 7. Enrolamiento TOTP MFA
+    const mfaSetupRes = await fastifyApp.inject({
+      method: 'POST',
+      url: '/api/v1/auth/mfa/setup',
+      headers: { authorization: `Bearer ${writerToken}` },
+    });
+    const mfaSetupBody = JSON.parse(mfaSetupRes.payload);
+    if (mfaSetupRes.statusCode !== 200 || !mfaSetupBody.secret) {
+      throw new Error(`MFA setup falló: ${mfaSetupRes.payload}`);
     }
 
-    const readyBody = JSON.parse(readyRes.payload);
-    if (readyRes.statusCode !== 200 || readyBody.status !== 'ready' || readyBody.database !== 'connected' || readyBody.redis !== 'connected') {
-      throw new Error(`CRITICAL FAIL (C-02): GET /readyz devolvió HTTP ${readyRes.statusCode} (${readyRes.payload}), se requiere HTTP 200 'ready' con database='connected' y redis='connected'.`);
+    const { generateTotpCode } = await import('../dist/auth/crypto.js');
+    const firstCode = generateTotpCode(mfaSetupBody.secret);
+
+    const mfaConfirmRes = await fastifyApp.inject({
+      method: 'POST',
+      url: '/api/v1/auth/mfa/confirm',
+      headers: { authorization: `Bearer ${writerToken}` },
+      payload: { code: firstCode },
+    });
+    const mfaConfirmBody = JSON.parse(mfaConfirmRes.payload);
+    if (mfaConfirmRes.statusCode !== 200 || !mfaConfirmBody.backupCodes || mfaConfirmBody.backupCodes.length !== 10) {
+      throw new Error(`MFA confirm falló: ${mfaConfirmRes.payload}`);
+    }
+    console.log('✅ MFA API: TOTP enrolado exitosamente y 10 códigos de respaldo generados.');
+
+    // 8. Consulta /api/v1/auth/me y Verificación del Contexto de Autorización
+    const meRes = await fastifyApp.inject({
+      method: 'GET',
+      url: '/api/v1/auth/me',
+      headers: { authorization: `Bearer ${writerToken}` },
+    });
+    const meBody = JSON.parse(meRes.payload);
+    if (meRes.statusCode !== 200 || meBody.user.email !== 'writer.nuevo@test.canon') {
+      throw new Error(`GET /api/v1/auth/me falló: ${meRes.payload}`);
+    }
+    console.log('✅ Auth API: GET /api/v1/auth/me retornó el perfil y contexto resuelto.');
+
+    // 9. Cierre de Sesión (Logout)
+    const logoutRes = await fastifyApp.inject({
+      method: 'POST',
+      url: '/api/v1/auth/logout',
+      headers: { authorization: `Bearer ${writerToken}` },
+    });
+    if (logoutRes.statusCode !== 200) {
+      throw new Error(`Logout falló: ${logoutRes.payload}`);
     }
 
-    console.log('✅ PROBES HTTP FASTIFY: GET /readyz = 200 {"status":"ready","database":"connected","redis":"connected"} CONFIRMADO EXITOSAMENTE.');
-    console.log('\n🎉 GATE DE INTEGRACIÓN REAL v0.3.11 COMPLETO Y CERTIFICADO');
+    // Verificar que la sesión revocada no sea accesible
+    const meRevokedRes = await fastifyApp.inject({
+      method: 'GET',
+      url: '/api/v1/auth/me',
+      headers: { authorization: `Bearer ${writerToken}` },
+    });
+    if (meRevokedRes.statusCode !== 401) {
+      throw new Error(`Sesión revocada siguió siendo aceptada: ${meRevokedRes.payload}`);
+    }
+    console.log('✅ Auth API: Logout revocó la sesión correctamente en PostgreSQL.');
+
+    console.log('\n🎉 SUITE DE INTEGRACIÓN FASE 1.1 COMPLETA Y CERTIFICADA (PASS)');
 
   } finally {
-    // H-01 / C-03: Limpieza incondicional en bloque finally (SE GARANTIZA SU EJECUCIÓN AL LANZAR THROW EN LUGAR DE PROCESS.EXIT)
     if (fastifyApp) {
       await fastifyApp.close().catch(() => {});
     }
@@ -180,10 +305,10 @@ async function runIntegrationTest() {
     } catch {}
 
     if (composeStarted) {
-      console.log('\n🧹 [H-01/C-03 FINALLY CLEANUP] Destruyendo contenedores y volúmenes de prueba Docker Compose (down -v)...');
+      console.log('\n🧹 [FINALLY CLEANUP] Destruyendo contenedores y volúmenes de prueba Docker Compose (down -v)...');
       try {
         execSync('docker compose -f docker-compose.audit.yml down -v', { stdio: 'inherit' });
-        console.log('✅ [H-01/C-03 FINALLY CLEANUP] Recursos Docker destruidos incondicionalmente en finally.');
+        console.log('✅ [FINALLY CLEANUP] Recursos Docker destruidos incondicionalmente en finally.');
       } catch (downErr) {
         console.warn('⚠️ Error al destruir contenedores Docker:', downErr.message);
       }

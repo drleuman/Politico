@@ -65,39 +65,45 @@ ALTER DEFAULT PRIVILEGES FOR ROLE postgres REVOKE EXECUTE ON FUNCTIONS FROM PUBL
 ALTER DEFAULT PRIVILEGES REVOKE EXECUTE ON FUNCTIONS FROM PUBLIC;
 
 -- 3. H-02: Matriz de mínimos privilegios DML explícitos (0 GRANT ALL)
--- Tablas operativas de borradores y sesiones: DML permitido
-GRANT SELECT, INSERT, UPDATE, DELETE ON public.documents TO app_user;
-GRANT SELECT, INSERT, UPDATE, DELETE ON public.document_versions TO app_user;
-GRANT SELECT, INSERT, UPDATE, DELETE ON public.submissions TO app_user;
-GRANT SELECT, INSERT, UPDATE ON public.user_sessions TO app_user;
+-- Tablas operativas de borradores, invitaciones, usuarios y sesiones: DML permitido para la aplicación
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.documents TO app_user, politica_canon_app;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.document_versions TO app_user, politica_canon_app;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.submissions TO app_user, politica_canon_app;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.invitations TO app_user, politica_canon_app;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.users TO app_user, politica_canon_app;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.user_credentials TO app_user, politica_canon_app;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.user_sessions TO app_user, politica_canon_app;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.password_reset_tokens TO app_user, politica_canon_app;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.mfa_backup_codes TO app_user, politica_canon_app;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.organization_memberships TO app_user, politica_canon_app;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.workspace_memberships TO app_user, politica_canon_app;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.role_assignments TO app_user, politica_canon_app;
+GRANT SELECT, INSERT, UPDATE ON public.audit_outbox TO app_user, politica_canon_app;
 
--- Tablas de control y gobernanza: SOLO LECTURA (SELECT) para app_user
-GRANT SELECT ON public.organizations TO app_user;
-GRANT SELECT ON public.workspaces TO app_user;
-GRANT SELECT ON public.authority_bodies TO app_user;
-GRANT SELECT ON public.authority_memberships TO app_user;
-GRANT SELECT ON public.organization_memberships TO app_user;
-GRANT SELECT ON public.users TO app_user;
-GRANT SELECT ON public.role_assignments TO app_user;
-GRANT SELECT ON public.decisions TO app_user;
-GRANT SELECT ON public.decision_votes TO app_user;
-GRANT SELECT ON public.publications TO app_user;
-GRANT SELECT ON public.publication_events TO app_user;
+-- Tablas de control y gobernanza: SOLO LECTURA (SELECT) para app_user y politica_canon_app
+GRANT SELECT ON public.organizations TO app_user, politica_canon_app;
+GRANT SELECT ON public.workspaces TO app_user, politica_canon_app;
+GRANT SELECT ON public.authority_bodies TO app_user, politica_canon_app;
+GRANT SELECT ON public.authority_memberships TO app_user, politica_canon_app;
+GRANT SELECT ON public.decisions TO app_user, politica_canon_app;
+GRANT SELECT ON public.decision_votes TO app_user, politica_canon_app;
+GRANT SELECT ON public.publications TO app_user, politica_canon_app;
+GRANT SELECT ON public.publication_events TO app_user, politica_canon_app;
 
 -- Concesión de solo lectura en tabla de control de migraciones
 DO $$
 BEGIN
     IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'schema_migrations') THEN
-        GRANT SELECT ON public.schema_migrations TO app_user;
+        GRANT SELECT ON public.schema_migrations TO app_user, politica_canon_app;
     END IF;
 END $$;
 
-GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO app_user;
+GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO app_user, politica_canon_app;
 
--- Revocación explícita de escritura directa en tablas de control, gobernanza y auditoría
-REVOKE INSERT, UPDATE, DELETE ON public.organizations, public.workspaces, public.authority_bodies, public.authority_memberships, public.organization_memberships, public.users, public.role_assignments, public.decisions, public.decision_votes, public.publications, public.publication_events, public.audit_events, public.audit_outbox FROM app_user;
+-- Revocación explícita de escritura directa en tablas inmutables de decisiones, publicaciones y auditoría eventos
+REVOKE INSERT, UPDATE, DELETE ON public.organizations, public.workspaces, public.authority_bodies, public.authority_memberships, public.decisions, public.decision_votes, public.publications, public.publication_events, public.audit_events FROM app_user;
 
-REVOKE INSERT, UPDATE, DELETE ON public.organizations, public.workspaces, public.authority_bodies, public.authority_memberships, public.organization_memberships, public.users, public.role_assignments, public.decisions, public.decision_votes, public.publications, public.publication_events, public.audit_events, public.audit_outbox FROM politica_canon_app;
+REVOKE INSERT, UPDATE, DELETE ON public.organizations, public.workspaces, public.authority_bodies, public.authority_memberships, public.decisions, public.decision_votes, public.publications, public.publication_events, public.audit_events FROM politica_canon_app;
 
 -- Concesiones para audit_worker y audit_reader
 GRANT SELECT, INSERT, UPDATE ON public.audit_outbox TO audit_worker;

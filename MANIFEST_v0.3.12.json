@@ -1,0 +1,10 @@
+{
+    "version":  "0.3.12",
+    "releaseDate":  "2026-09-16",
+    "packageName":  "politica-canon-v0.3.12.zip",
+    "sizeBytes":  467568,
+    "sha256":  "5035ef4bb74cca674dca618cf344a0e6b54922b586f7356e203a4b1298c673f7",
+    "fileCount":  203,
+    "canonicalDatabaseEngine":  "PostgreSQL 16+",
+    "dictamen":  "PASS (RELEASE V0.3.12 FASE 1.1 IDENTIDAD INVITACIONES USUARIOS SESIONES Y RBAC/ABAC, NO BOM UTF-8)"
+}

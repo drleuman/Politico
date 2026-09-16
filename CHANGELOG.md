@@ -4,6 +4,19 @@ Todas las modificaciones notables introducidas en este proyecto serán documenta
 
 El formato está basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.0.0/), y este proyecto adhiere a [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.12] - 2026-09-16
+
+### Añadido (Fase 1.1 — Identidad, Invitaciones, Usuarios, Sesiones y RBAC/ABAC)
+- **Invitaciones Privadas de Un Solo Uso (`src/auth/invitations.ts`):** Implementada creación (`POST /api/v1/invitations`), listado (`GET /api/v1/invitations`), revocación (`DELETE /api/v1/invitations/:id`) y consumo de invitaciones (`POST /api/v1/invitations/accept`). Generación de tokens de alta entropía de 256 bits, almacenamiento exclusivo de su hash SHA-256 (`token_hash`) y vinculación estricta a organización, workspace opcional, rol inicial y emisor auditado.
+- **Gestión de Usuarios y Credenciales Argon2id (`src/auth/crypto.ts`):** Alta de usuarios condicionada al consumo de invitaciones válidas. Hashing de contraseñas con Argon2id (`m=65536, t=3, p=4`), validación de complejidad mínima y flujo seguro de restablecimiento de contraseña mediante tokens de un solo uso con expiración.
+- **Sesiones Persistidas y Rotación en PostgreSQL (`src/auth/session.ts`):** Tabla `user_sessions` en PostgreSQL como fuente autoritativa de verdad. Rotación del token de sesión en login y elevación de privilegios. Expiración inactiva (30m), expiración absoluta (24h), límite de 5 sesiones activas por usuario y cierre de sesión individual (`/logout`) y masivo (`/logout-all`). Cookie `HttpOnly`, `Secure`, `SameSite=Lax`.
+- **TOTP MFA y Regla de Frescura de Gobernanza (`src/auth/mfa.ts`):** Enrolamiento TOTP (RFC 6238), cifrado AES-256-GCM del secreto en reposo (`users.mfa_secret_encrypted`), 10 códigos de respaldo de un solo uso (`mfa_backup_codes`) y verificación step-up (`POST /api/v1/auth/mfa/verify`) para actualizar `mfa_verified_at` exigida para acciones sensibles (frescura <= 15 min / 900s).
+- **RBAC/ABAC Persistido y Servidor-Centric (`src/auth/roles.ts`):** Resolución de contexto de autorización desde `role_assignments`, `organization_memberships`, `workspace_memberships` y `authority_memberships`. Evaluación centralizada en `evaluateAuthorizationContract()`.
+- **Eventos de Seguridad en Audit Outbox (`src/audit/events.ts`):** Registro atómico y sanitizado de eventos de seguridad (`INVITATION_*`, `USER_REGISTERED`, `LOGIN_*`, `LOGOUT_*`, `PASSWORD_RESET_*`, `MFA_*`, `ROLE_ASSIGNED`) en `audit_outbox`.
+- **Migración DDL Incremental (`db/migrations/0003_fase_1_1_identity_rbac.sql`):** Modificaciones DDL executadas por `app_owner` para hacer `workspace_id` opcional en invitaciones, añadir campos MFA y bloqueo en `users`, y actualizar `0002_bootstrap_permissions.sql` con RLS e imposición de privilegios mínimos para `politica_canon_app`.
+
+---
+
 ## [0.3.11] - 2026-09-16
 
 ### Añadido y Remediado (Dictamen de Auditoría v0.3.10 — Bloqueadores B-01 y B-02)

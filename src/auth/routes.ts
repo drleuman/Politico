@@ -1,0 +1,679 @@
+import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
+import { dbPool } from '../db/client.js';
+import { redisClient } from '../redis/client.js';
+import { config } from '../config/env.js';
+import {
+  hashPassword,
+  verifyPassword,
+  validatePasswordPolicy,
+  generateHighEntropyToken,
+  hashToken,
+} from './crypto.js';
+import {
+  createSession,
+  validateSession,
+  rotateSession,
+  revokeSession,
+  revokeAllUserSessions,
+} from './session.js';
+import {
+  createInvitation,
+  listInvitations,
+  revokeInvitation,
+  acceptInvitation,
+} from './invitations.js';
+import {
+  setupMfa,
+  confirmMfa,
+  verifyMfaStepUp,
+  disableMfa,
+} from './mfa.js';
+import { buildResolvedAuthorizationContext } from './roles.js';
+import { recordSecurityAuditEvent } from '../audit/events.js';
+
+const MASTER_KEY = config.sessionSecret || 'default_master_key_change_in_production_environment_32b';
+
+/**
+ * Control de tasa (Rate Limiting) con Redis
+ */
+async function checkRateLimit(key: string, maxAttempts: number, windowSeconds: number): Promise<boolean> {
+  if (!redisClient) return true;
+
+  try {
+    if (redisClient.status !== 'ready' && redisClient.status !== 'connecting') {
+      await redisClient.connect();
+    }
+    const attempts = await redisClient.incr(key);
+    if (attempts === 1) {
+      await redisClient.expire(key, windowSeconds);
+    }
+    return attempts <= maxAttempts;
+  } catch {
+    return true;
+  }
+}
+
+/**
+ * Helper para extraer el token de sesión desde las cookies o la cabecera Authorization
+ */
+function extractSessionToken(request: FastifyRequest): string | null {
+  // 1. Extraer desde la cookie 'sid'
+  const cookies = request.cookies || {};
+  if (cookies.sid) return cookies.sid;
+
+  // 2. Extraer desde la cabecera Authorization: Bearer <token>
+  const authHeader = request.headers.authorization;
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    return authHeader.substring(7).trim();
+  }
+
+  return null;
+}
+
+export async function registerAuthRoutes(fastify: FastifyInstance) {
+  const pool = dbPool;
+
+  // --------------------------------------------------------------------------
+  // 1. ENDPOINTS DE INVITACIONES
+  // --------------------------------------------------------------------------
+
+  // POST /api/v1/invitations — Crear invitación privada
+  fastify.post('/api/v1/invitations', async (request: FastifyRequest, reply: FastifyReply) => {
+    const token = extractSessionToken(request);
+    const client = await pool.connect();
+    try {
+      const { session, user } = await validateSession(client, token || '');
+      if (!session || !user) {
+        return reply.status(401).send({ error: 'UNAUTHENTICATED: Sesión no válida o expirada.' });
+      }
+
+      const body = request.body as any || {};
+      const { email, role, workspaceId, expiresInHours } = body;
+
+      if (!email || !role) {
+        return reply.status(400).send({ error: 'MISSING_FIELDS: email y role son obligatorios.' });
+      }
+
+      const result = await createInvitation(client, {
+        organizationId: session.organizationId,
+        workspaceId,
+        email,
+        role,
+        invitedBy: session.userId,
+        expiresInHours,
+      });
+
+      return reply.status(201).send({
+        status: 'created',
+        invitationId: result.invitationId,
+        rawToken: result.rawToken,
+        expiresAt: result.expiresAt,
+        invitationUrl: `${config.appBaseUrl}/accept-invitation?token=${result.rawToken}`,
+      });
+    } finally {
+      client.release();
+    }
+  });
+
+  // GET /api/v1/invitations — Listar invitaciones activas de la organización
+  fastify.get('/api/v1/invitations', async (request: FastifyRequest, reply: FastifyReply) => {
+    const token = extractSessionToken(request);
+    const client = await pool.connect();
+    try {
+      const { session } = await validateSession(client, token || '');
+      if (!session) {
+        return reply.status(401).send({ error: 'UNAUTHENTICATED: Requiere sesión activa.' });
+      }
+
+      const list = await listInvitations(client, session.organizationId);
+      return reply.status(200).send({ invitations: list });
+    } finally {
+      client.release();
+    }
+  });
+
+  // DELETE /api/v1/invitations/:id — Revocar invitación
+  fastify.delete('/api/v1/invitations/:id', async (request: FastifyRequest, reply: FastifyReply) => {
+    const token = extractSessionToken(request);
+    const { id } = request.params as any;
+    const client = await pool.connect();
+    try {
+      const { session } = await validateSession(client, token || '');
+      if (!session) {
+        return reply.status(401).send({ error: 'UNAUTHENTICATED: Requiere sesión activa.' });
+      }
+
+      const revoked = await revokeInvitation(client, {
+        invitationId: id,
+        organizationId: session.organizationId,
+        revokedBy: session.userId,
+      });
+
+      if (!revoked) {
+        return reply.status(404).send({ error: 'INVITATION_NOT_FOUND: Invitación no encontrada o consumida.' });
+      }
+
+      return reply.status(200).send({ status: 'revoked' });
+    } finally {
+      client.release();
+    }
+  });
+
+  // POST /api/v1/invitations/accept — Aceptar invitación privada y registrar usuario
+  fastify.post('/api/v1/invitations/accept', async (request: FastifyRequest, reply: FastifyReply) => {
+    const body = request.body as any || {};
+    const { token, fullName, password } = body;
+
+    if (!token || !fullName || !password) {
+      return reply.status(400).send({ error: 'MISSING_FIELDS: token, fullName y password son obligatorios.' });
+    }
+
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      const newUser = await acceptInvitation(client, { rawToken: token, fullName, password });
+      await client.query('COMMIT');
+
+      return reply.status(201).send({
+        status: 'user_created',
+        userId: newUser.userId,
+        email: newUser.email,
+        organizationId: newUser.organizationId,
+        role: newUser.role,
+      });
+    } catch (err: any) {
+      await client.query('ROLLBACK');
+      return reply.status(400).send({ error: err.message });
+    } finally {
+      client.release();
+    }
+  });
+
+  // --------------------------------------------------------------------------
+  // 2. ENDPOINTS DE AUTENTICACIÓN Y SESIÓN
+  // --------------------------------------------------------------------------
+
+  // POST /api/v1/auth/login — Inicio de sesión con credenciales Argon2id
+  fastify.post('/api/v1/auth/login', async (request: FastifyRequest, reply: FastifyReply) => {
+    const ip = request.ip || '127.0.0.1';
+    const userAgent = request.headers['user-agent'] || 'Unknown';
+    const body = request.body as any || {};
+    const { email, password, organizationId } = body;
+
+    if (!email || !password) {
+      return reply.status(400).send({ error: 'MISSING_FIELDS: email y password son requeridos.' });
+    }
+
+    // Rate Limiting
+    const rateOk = await checkRateLimit(`rate:login:${ip}:${email.toLowerCase()}`, 5, 900);
+    if (!rateOk) {
+      return reply.status(429).send({ error: 'RATE_LIMIT_EXCEEDED: Demasiados intentos fallidos. Reintente en 15 minutos.' });
+    }
+
+    const client = await pool.connect();
+    try {
+      const userRes = await client.query(
+        `SELECT u.id, u.email, u.full_name, u.is_active, u.mfa_enabled, u.failed_login_attempts, u.locked_until, uc.password_hash
+         FROM users u
+         JOIN user_credentials uc ON uc.user_id = u.id
+         WHERE u.email = $1`,
+        [email.trim().toLowerCase()]
+      );
+
+      if (userRes.rows.length === 0) {
+        return reply.status(401).send({ error: 'INVALID_CREDENTIALS: Credenciales inválidas.' });
+      }
+
+      const user = userRes.rows[0];
+
+      if (!user.is_active) {
+        return reply.status(403).send({ error: 'USER_INACTIVE: La cuenta se encuentra desactivada.' });
+      }
+
+      if (user.locked_until && new Date(user.locked_until) > new Date()) {
+        return reply.status(403).send({ error: 'ACCOUNT_LOCKED: Cuenta bloqueada temporalmente por seguridad.' });
+      }
+
+      const isMatch = await verifyPassword(user.password_hash, password);
+      if (!isMatch) {
+        const attempts = (user.failed_login_attempts || 0) + 1;
+        let lockUntilSql = null;
+        if (attempts >= 5) {
+          lockUntilSql = new Date(Date.now() + 15 * 60 * 1000).toISOString();
+        }
+        await client.query(
+          `UPDATE users SET failed_login_attempts = $1, locked_until = $2 WHERE id = $3`,
+          [attempts, lockUntilSql, user.id]
+        );
+
+        // Registro de auditoría
+        const orgForAudit = organizationId || (await client.query(`SELECT organization_id FROM organization_memberships WHERE user_id = $1 LIMIT 1`, [user.id])).rows[0]?.organization_id;
+        if (orgForAudit) {
+          await recordSecurityAuditEvent(client, {
+            organizationId: orgForAudit,
+            actorId: user.id,
+            eventType: 'LOGIN_FAILED',
+            payload: { ipAddress: ip },
+          });
+        }
+
+        return reply.status(401).send({ error: 'INVALID_CREDENTIALS: Credenciales inválidas.' });
+      }
+
+      // Reiniciar intentos fallidos
+      await client.query(`UPDATE users SET failed_login_attempts = 0, locked_until = NULL WHERE id = $1`, [user.id]);
+
+      // Seleccionar organización del usuario
+      let targetOrgId = organizationId;
+      if (!targetOrgId) {
+        const orgRes = await client.query(
+          `SELECT organization_id FROM organization_memberships WHERE user_id = $1 AND is_active = TRUE LIMIT 1`,
+          [user.id]
+        );
+        if (orgRes.rows.length === 0) {
+          return reply.status(403).send({ error: 'NO_ACTIVE_ORGANIZATION: El usuario no posee membresía activa.' });
+        }
+        targetOrgId = orgRes.rows[0].organization_id;
+      }
+
+      // Crear sesión persistida
+      const { session, rawToken, rawCsrfToken } = await createSession(client, {
+        userId: user.id,
+        organizationId: targetOrgId,
+        ipAddress: ip,
+        userAgent,
+        mfaVerified: false,
+      });
+
+      await recordSecurityAuditEvent(client, {
+        organizationId: targetOrgId,
+        actorId: user.id,
+        eventType: 'LOGIN_SUCCESS',
+        payload: { sessionId: session.id, ipAddress: ip },
+      });
+
+      // Cookie de sesión HttpOnly
+      reply.setCookie('sid', rawToken, {
+        path: '/',
+        httpOnly: true,
+        secure: config.nodeEnv === 'production',
+        sameSite: 'lax',
+      });
+
+      return reply.status(200).send({
+        status: 'authenticated',
+        token: rawToken,
+        csrfToken: rawCsrfToken,
+        user: {
+          id: user.id,
+          email: user.email,
+          fullName: user.full_name,
+          mfaEnabled: user.mfa_enabled,
+        },
+        organizationId: targetOrgId,
+      });
+    } finally {
+      client.release();
+    }
+  });
+
+  // POST /api/v1/auth/logout — Cierre de la sesión actual
+  fastify.post('/api/v1/auth/logout', async (request: FastifyRequest, reply: FastifyReply) => {
+    const token = extractSessionToken(request);
+    const client = await pool.connect();
+    try {
+      if (token) {
+        const { session } = await validateSession(client, token);
+        if (session) {
+          await revokeSession(client, token);
+          await recordSecurityAuditEvent(client, {
+            organizationId: session.organizationId,
+            actorId: session.userId,
+            eventType: 'LOGOUT',
+            payload: { sessionId: session.id },
+          });
+        }
+      }
+
+      reply.clearCookie('sid', { path: '/' });
+      return reply.status(200).send({ status: 'logged_out' });
+    } finally {
+      client.release();
+    }
+  });
+
+  // POST /api/v1/auth/logout-all — Cierre de todas las sesiones del usuario
+  fastify.post('/api/v1/auth/logout-all', async (request: FastifyRequest, reply: FastifyReply) => {
+    const token = extractSessionToken(request);
+    const client = await pool.connect();
+    try {
+      const { session } = await validateSession(client, token || '');
+      if (!session) {
+        return reply.status(401).send({ error: 'UNAUTHENTICATED: Requiere sesión activa.' });
+      }
+
+      const revokedCount = await revokeAllUserSessions(client, session.userId);
+      await recordSecurityAuditEvent(client, {
+        organizationId: session.organizationId,
+        actorId: session.userId,
+        eventType: 'LOGOUT_ALL',
+        payload: { revokedCount },
+      });
+
+      reply.clearCookie('sid', { path: '/' });
+      return reply.status(200).send({ status: 'all_sessions_revoked', count: revokedCount });
+    } finally {
+      client.release();
+    }
+  });
+
+  // POST /api/v1/auth/forgot-password — Solicitud de restablecimiento de contraseña
+  fastify.post('/api/v1/auth/forgot-password', async (request: FastifyRequest, reply: FastifyReply) => {
+    const ip = request.ip || '127.0.0.1';
+    const body = request.body as any || {};
+    const { email } = body;
+
+    if (!email) {
+      return reply.status(400).send({ error: 'MISSING_EMAIL: El correo electrónico es requerido.' });
+    }
+
+    const rateOk = await checkRateLimit(`rate:forgot:${ip}:${email.toLowerCase()}`, 3, 900);
+    if (!rateOk) {
+      return reply.status(429).send({ error: 'RATE_LIMIT_EXCEEDED: Solicitudes de restablecimiento excedidas.' });
+    }
+
+    const client = await pool.connect();
+    try {
+      const userRes = await client.query(`SELECT id FROM users WHERE email = $1 AND is_active = TRUE`, [email.trim().toLowerCase()]);
+      if (userRes.rows.length > 0) {
+        const userId = userRes.rows[0].id;
+        const rawToken = generateHighEntropyToken(32);
+        const tokenHash = hashToken(rawToken);
+        const expiresAt = new Date(Date.now() + 60 * 60 * 1000).toISOString();
+
+        await client.query(
+          `INSERT INTO password_reset_tokens (user_id, token_hash, expires_at) VALUES ($1, $2, $3)`,
+          [userId, tokenHash, expiresAt]
+        );
+
+        const orgRes = await client.query(`SELECT organization_id FROM organization_memberships WHERE user_id = $1 LIMIT 1`, [userId]);
+        if (orgRes.rows.length > 0) {
+          await recordSecurityAuditEvent(client, {
+            organizationId: orgRes.rows[0].organization_id,
+            actorId: userId,
+            eventType: 'PASSWORD_RESET_REQUESTED',
+            payload: { userId },
+          });
+        }
+
+        return reply.status(200).send({
+          status: 'reset_requested',
+          message: 'Si la cuenta existe, se ha generado el token de recuperación.',
+          resetToken: rawToken, // En desarrollo/test devolvemos el token
+        });
+      }
+
+      return reply.status(200).send({
+        status: 'reset_requested',
+        message: 'Si la cuenta existe, se ha generado el token de recuperación.',
+      });
+    } finally {
+      client.release();
+    }
+  });
+
+  // POST /api/v1/auth/reset-password — Ejecutar restablecimiento con token
+  fastify.post('/api/v1/auth/reset-password', async (request: FastifyRequest, reply: FastifyReply) => {
+    const body = request.body as any || {};
+    const { token, newPassword } = body;
+
+    if (!token || !newPassword) {
+      return reply.status(400).send({ error: 'MISSING_FIELDS: token y newPassword son requeridos.' });
+    }
+
+    const polCheck = validatePasswordPolicy(newPassword);
+    if (!polCheck.valid) {
+      return reply.status(400).send({ error: polCheck.reason });
+    }
+
+    const client = await pool.connect();
+    try {
+      const tokenHash = hashToken(token);
+      const resetRes = await client.query(
+        `SELECT id, user_id, expires_at, consumed_at FROM password_reset_tokens WHERE token_hash = $1`,
+        [tokenHash]
+      );
+
+      if (resetRes.rows.length === 0 || resetRes.rows[0].consumed_at || new Date(resetRes.rows[0].expires_at) <= new Date()) {
+        return reply.status(400).send({ error: 'TOKEN_INVALID: Token de recuperación inválido, consumido o expirado.' });
+      }
+
+      const { id: resetId, user_id: userId } = resetRes.rows[0];
+      const newHash = await hashPassword(newPassword);
+
+      await client.query(`UPDATE user_credentials SET password_hash = $1, updated_at = NOW() WHERE user_id = $2`, [newHash, userId]);
+      await client.query(`UPDATE password_reset_tokens SET consumed_at = NOW() WHERE id = $1`, [resetId]);
+      await revokeAllUserSessions(client, userId);
+
+      const orgRes = await client.query(`SELECT organization_id FROM organization_memberships WHERE user_id = $1 LIMIT 1`, [userId]);
+      if (orgRes.rows.length > 0) {
+        await recordSecurityAuditEvent(client, {
+          organizationId: orgRes.rows[0].organization_id,
+          actorId: userId,
+          eventType: 'PASSWORD_RESET_COMPLETED',
+          payload: { userId },
+        });
+      }
+
+      return reply.status(200).send({ status: 'password_reset_successful' });
+    } finally {
+      client.release();
+    }
+  });
+
+  // POST /api/v1/auth/change-password — Cambio de contraseña autenticado
+  fastify.post('/api/v1/auth/change-password', async (request: FastifyRequest, reply: FastifyReply) => {
+    const token = extractSessionToken(request);
+    const body = request.body as any || {};
+    const { currentPassword, newPassword } = body;
+
+    if (!currentPassword || !newPassword) {
+      return reply.status(400).send({ error: 'MISSING_FIELDS: currentPassword y newPassword son requeridos.' });
+    }
+
+    const polCheck = validatePasswordPolicy(newPassword);
+    if (!polCheck.valid) {
+      return reply.status(400).send({ error: polCheck.reason });
+    }
+
+    const client = await pool.connect();
+    try {
+      const { session, user } = await validateSession(client, token || '');
+      if (!session || !user) {
+        return reply.status(401).send({ error: 'UNAUTHENTICATED: Requiere sesión activa.' });
+      }
+
+      const credRes = await client.query(`SELECT password_hash FROM user_credentials WHERE user_id = $1`, [user.id]);
+      if (credRes.rows.length === 0 || !(await verifyPassword(credRes.rows[0].password_hash, currentPassword))) {
+        return reply.status(401).send({ error: 'PASSWORD_INCORRECT: Contraseña actual incorrecta.' });
+      }
+
+      const newHash = await hashPassword(newPassword);
+      await client.query(`UPDATE user_credentials SET password_hash = $1, updated_at = NOW() WHERE user_id = $2`, [newHash, user.id]);
+
+      // Revocar las demás sesiones manteniendo la actual rotada
+      await client.query(`UPDATE user_sessions SET revoked_at = NOW() WHERE user_id = $1 AND id != $2 AND revoked_at IS NULL`, [user.id, session.id]);
+
+      await recordSecurityAuditEvent(client, {
+        organizationId: session.organizationId,
+        actorId: user.id,
+        eventType: 'PASSWORD_CHANGED',
+        payload: { userId: user.id },
+      });
+
+      return reply.status(200).send({ status: 'password_changed' });
+    } finally {
+      client.release();
+    }
+  });
+
+  // --------------------------------------------------------------------------
+  // 3. ENDPOINTS TOTP MFA
+  // --------------------------------------------------------------------------
+
+  // POST /api/v1/auth/mfa/setup — Configuración inicial TOTP
+  fastify.post('/api/v1/auth/mfa/setup', async (request: FastifyRequest, reply: FastifyReply) => {
+    const token = extractSessionToken(request);
+    const client = await pool.connect();
+    try {
+      const { session, user } = await validateSession(client, token || '');
+      if (!session || !user) {
+        return reply.status(401).send({ error: 'UNAUTHENTICATED: Requiere sesión activa.' });
+      }
+
+      const setupResult = await setupMfa(client, {
+        userId: user.id,
+        organizationId: session.organizationId,
+        userEmail: user.email,
+        masterKey: MASTER_KEY,
+      });
+
+      return reply.status(200).send(setupResult);
+    } finally {
+      client.release();
+    }
+  });
+
+  // POST /api/v1/auth/mfa/confirm — Confirmar enrolamiento con primer código TOTP
+  fastify.post('/api/v1/auth/mfa/confirm', async (request: FastifyRequest, reply: FastifyReply) => {
+    const token = extractSessionToken(request);
+    const body = request.body as any || {};
+    const { code } = body;
+
+    if (!code) {
+      return reply.status(400).send({ error: 'MISSING_CODE: El código TOTP es obligatorio.' });
+    }
+
+    const client = await pool.connect();
+    try {
+      const { session, user } = await validateSession(client, token || '');
+      if (!session || !user) {
+        return reply.status(401).send({ error: 'UNAUTHENTICATED: Requiere sesión activa.' });
+      }
+
+      const result = await confirmMfa(client, {
+        userId: user.id,
+        organizationId: session.organizationId,
+        sessionId: session.id,
+        code,
+        masterKey: MASTER_KEY,
+      });
+
+      return reply.status(200).send({ status: 'mfa_enabled', backupCodes: result.backupCodes });
+    } catch (err: any) {
+      return reply.status(400).send({ error: err.message });
+    } finally {
+      client.release();
+    }
+  });
+
+  // POST /api/v1/auth/mfa/verify — Verificación Step-up para refrescar mfa_verified_at (frescura <= 15 min)
+  fastify.post('/api/v1/auth/mfa/verify', async (request: FastifyRequest, reply: FastifyReply) => {
+    const token = extractSessionToken(request);
+    const body = request.body as any || {};
+    const { code } = body;
+
+    if (!code) {
+      return reply.status(400).send({ error: 'MISSING_CODE: El código TOTP o de respaldo es obligatorio.' });
+    }
+
+    const client = await pool.connect();
+    try {
+      const { session, user } = await validateSession(client, token || '');
+      if (!session || !user) {
+        return reply.status(401).send({ error: 'UNAUTHENTICATED: Requiere sesión activa.' });
+      }
+
+      const res = await verifyMfaStepUp(client, {
+        userId: user.id,
+        organizationId: session.organizationId,
+        sessionId: session.id,
+        code,
+        masterKey: MASTER_KEY,
+      });
+
+      return reply.status(200).send({ status: 'mfa_verified', usedBackupCode: res.usedBackupCode });
+    } catch (err: any) {
+      return reply.status(400).send({ error: err.message });
+    } finally {
+      client.release();
+    }
+  });
+
+  // POST /api/v1/auth/mfa/disable — Desactivar TOTP MFA
+  fastify.post('/api/v1/auth/mfa/disable', async (request: FastifyRequest, reply: FastifyReply) => {
+    const token = extractSessionToken(request);
+    const body = request.body as any || {};
+    const { password, code } = body;
+
+    if (!password || !code) {
+      return reply.status(400).send({ error: 'MISSING_FIELDS: password y code son obligatorios.' });
+    }
+
+    const client = await pool.connect();
+    try {
+      const { session, user } = await validateSession(client, token || '');
+      if (!session || !user) {
+        return reply.status(401).send({ error: 'UNAUTHENTICATED: Requiere sesión activa.' });
+      }
+
+      await disableMfa(client, {
+        userId: user.id,
+        organizationId: session.organizationId,
+        password,
+        code,
+        masterKey: MASTER_KEY,
+      });
+
+      return reply.status(200).send({ status: 'mfa_disabled' });
+    } catch (err: any) {
+      return reply.status(400).send({ error: err.message });
+    } finally {
+      client.release();
+    }
+  });
+
+  // GET /api/v1/auth/me — Información del usuario y contexto de autorización resuelto
+  fastify.get('/api/v1/auth/me', async (request: FastifyRequest, reply: FastifyReply) => {
+    const token = extractSessionToken(request);
+    const client = await pool.connect();
+    try {
+      const { session, user } = await validateSession(client, token || '');
+      if (!session || !user) {
+        return reply.status(401).send({ error: 'UNAUTHENTICATED: Requiere sesión activa.' });
+      }
+
+      const authContext = await buildResolvedAuthorizationContext(
+        client,
+        user.id,
+        session.organizationId,
+        session.mfaVerifiedAt
+      );
+
+      return reply.status(200).send({
+        user,
+        session: {
+          id: session.id,
+          organizationId: session.organizationId,
+          createdAt: session.createdAt,
+          idleExpiresAt: session.idleExpiresAt,
+          absoluteExpiresAt: session.absoluteExpiresAt,
+          mfaVerifiedAt: session.mfaVerifiedAt,
+        },
+        authContext,
+      });
+    } finally {
+      client.release();
+    }
+  });
+}

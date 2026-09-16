@@ -4,6 +4,16 @@ Todas las modificaciones notables introducidas en este proyecto serán documenta
 
 El formato está basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.0.0/), y este proyecto adhiere a [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.11] - 2026-09-16
+
+### Añadido y Remediado (Dictamen de Auditoría v0.3.10 — Bloqueadores B-01 y B-02)
+- **Modelo de Permisos Restringido por Pertenencia a Grupo (B-02):** Actualizado `deploy/scripts/provision.sh` y `DEPLOYMENT_REPORT.md` para cerrar los permisos del árbol de aplicación de `0755` a `0750` para directorios y `0640` para archivos. Se incorpora la pertenencia idempotente del usuario Unix `postgres` al grupo `politica-canon` (`usermod -aG politica-canon postgres`), garantizando acceso exclusivo para el runtime y las ejecuciones de bootstrap sin abrir lectura a usuarios del sistema no autorizados.
+- **Generación UTF-8 Estricta sin BOM en Manifiesto JSON:** Ajustado `scratch/create_zip_v0.3.11.ps1` usando `System.Text.UTF8Encoding($false)` para producir `MANIFEST_v0.3.11.json` sin marcas BOM en la codificación UTF-8.
+- **Actualización de Mensajes de Logs de Versión:** Corregido el migrador DDL `scripts/migrate-production.mjs` (anteriormente anunciaba `v0.3.4`) y el runner de integración real `scripts/test-integration-pg16.mjs` (anteriormente anunciaba `v0.3.9`) sincronizando la versión activa `v0.3.11`.
+- **Alineación de Metadatos:** Sincronizada la versión `0.3.11` en `package.json`, `deploy/systemd/politica-canon.service`, `public/index.html`, `src/server.ts`, `deploy/scripts/provision.sh`, `deploy/plesk/vhost_nginx.conf`, `DEPLOYMENT_REPORT.md`, matrices de remediación y validación.
+
+---
+
 ## [0.3.10] - 2026-09-16
 
 ### Añadido y Remediado (Ajustes de Despliegue Real Plesk / Ubuntu 24.04)

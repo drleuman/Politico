@@ -1,11 +1,11 @@
-# Informe de Despliegue y Guía de Aprovisionamiento — Política Canon v0.3.10 (Fase 1 MVP)
+# Informe de Despliegue y Guía de Aprovisionamiento — Política Canon v0.3.11 (Fase 1 MVP)
 
 **Fecha:** 16 de septiembre de 2026  
 **Dominio Target:** `peaceful-johnson.194-164-175-146.plesk.page`  
 **Entorno de Servidor:** Plesk Obsidian 18.0.80 / Ubuntu 24.04.5 LTS  
 **Motor de Aplicación:** Node.js 22.23.2 / Fastify TypeScript Monolith  
 **Motores Canónicos de Persistencia:** PostgreSQL 16.15 / Redis 7.0.15  
-**Estado:** **Fase 1 MVP Remediado 100% y Aprobado para Despliegue v0.3.10**
+**Estado:** **Fase 1 MVP Remediado 100% y Aprobado para Despliegue v0.3.11**
 
 ---
 
@@ -21,15 +21,29 @@
 
 ---
 
-## 2. Modelo de Permisos y Estructura de Grupos en Sistema
+## 2. Modelo de Permisos y Estructura de Grupos en Sistema (B-02)
 
-Para garantizar la reproducibilidad y la ejecución segura de las tres fases del bootstrap de base de datos sin elevar privilegios del rol runtime ni exponer archivos sensibles al sistema:
+Para garantizar la reproducibilidad y la ejecución segura de las tres fases del bootstrap de base de datos sin elevar privilegios del rol runtime, sin exponer archivos sensibles al sistema y cerrando la lectura a usuarios universales no autorizados (B-02):
 
 1. **Usuario de Servicio:** `politica-canon` (sistema, sin directorio home interactivo `/bin/false`).
-2. **Directorios de Código (`/opt/politica-canon` y `/opt/politica-canon/app`):** Permisos `0755` con propietario `politica-canon:politica-canon`. Esto permite la traversabilidad y lectura controlada por parte del usuario Unix `postgres` para ejecutar las herramientas de migración y bootstrap (`bootstrap:pre`, `migrate:prod`, `bootstrap:post`) sin abrir permisos de escritura global.
-3. **Caché npm Controlada (`/opt/politica-canon/.npm-cache`):** Propiedad de `politica-canon:politica-canon` con modo `0750`.
-4. **Archivo de Configuración Runtime (`/etc/politica-canon/runtime.env`):** Propiedad `root:politica-canon` con modo `0640`. No accesible por otros usuarios ni por el repositorio git.
-5. **Backups Pre-Migración (`/root/politica-canon/backups`):** Directorio restringido `root:root` modo `0700`, archivos `.dump` en modo `0600`.
+2. **Pertenencia a Grupo Restringido:** El usuario de sistema Unix `postgres` se añade al grupo `politica-canon`:
+   ```bash
+   sudo usermod -aG politica-canon postgres
+   ```
+3. **Directorios de Código (`/opt/politica-canon` y `/opt/politica-canon/app`):** Permisos `0750` con propietario `politica-canon:politica-canon`:
+   ```bash
+   sudo chown -R politica-canon:politica-canon /opt/politica-canon/app
+   sudo chmod 0750 /opt/politica-canon
+   sudo find /opt/politica-canon/app -type d -exec chmod 0750 {} +
+   ```
+   Esto permite la traversabilidad y lectura por parte del usuario Unix `postgres` únicamente por ser miembro del grupo `politica-canon` para ejecutar los scripts de bootstrap (`bootstrap:pre`, `migrate:prod`, `bootstrap:post`), manteniendo el repositorio oculto e inaccesible para usuarios no autorizados (no `0755` universal).
+4. **Archivos de Código (`/opt/politica-canon/app`):** Permisos `0640` con propietario `politica-canon:politica-canon`:
+   ```bash
+   sudo find /opt/politica-canon/app -type f -exec chmod 0640 {} +
+   ```
+5. **Caché npm Controlada (`/opt/politica-canon/.npm-cache`):** Propiedad de `politica-canon:politica-canon` con modo `0750`.
+6. **Archivo de Configuración Runtime (`/etc/politica-canon/runtime.env`):** Propiedad `root:politica-canon` con modo `0640`. No accesible por otros usuarios ni por el repositorio git.
+7. **Backups Pre-Migración (`/root/politica-canon/backups`):** Directorio restringido `root:root` modo `0700`, archivos `.dump` en modo `0600`.
 
 ---
 
@@ -44,7 +58,7 @@ sudo chmod 0700 /root/politica-canon
 echo "POLITICA_CANON_DATABASE_URL=postgresql://politica_canon_app:<PASSWORD>@127.0.0.1:5432/politica_canon" | sudo tee /root/politica-canon/runtime.env
 sudo chmod 0600 /root/politica-canon/runtime.env
 
-# 2. Ejecutar script de provisión inicial (crea usuario 'politica-canon', carpetas, permisos y SESSION_SECRET de 32+ bytes)
+# 2. Ejecutar script de provisión inicial (crea usuario 'politica-canon', añade postgres al grupo, carpetas, permisos 0750/0640 y SESSION_SECRET de 32+ bytes)
 sudo bash /opt/politica-canon/app/deploy/scripts/provision.sh
 ```
 
@@ -150,4 +164,5 @@ curl -u admin:<PASSWORD> -sI https://peaceful-johnson.194-164-175-146.plesk.page
 sudo systemctl stop politica-canon
 sudo -u postgres pg_restore --clean --dbname=politica_canon /root/politica-canon/backups/<ULTIMO_DUMP>.dump
 ```
+
 

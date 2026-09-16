@@ -1,0 +1,10 @@
+{
+    "version":  "0.3.11",
+    "releaseDate":  "2026-09-16",
+    "packageName":  "politica-canon-v0.3.11.zip",
+    "sizeBytes":  434715,
+    "sha256":  "431486b56fb8dcd7c6cdc074c68fc0fb2544d499ef649a99f28222109ea53057",
+    "fileCount":  189,
+    "canonicalDatabaseEngine":  "PostgreSQL 16+",
+    "dictamen":  "PASS (RELEASE V0.3.11 MODELO DE GRUPOS RESTRINGIDO 0750/0640 B-02, NO BOM UTF-8 Y VERSION LOGS CORREGIDOS)"
+}

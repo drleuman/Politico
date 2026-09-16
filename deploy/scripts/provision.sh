@@ -1,15 +1,20 @@
 #!/usr/bin/env bash
-# Script de Provisión Inicial de Servidor — Política Canon v0.3.10
+# Script de Provisión Inicial de Servidor — Política Canon v0.3.11
 # Ejecutar en el servidor Ubuntu 24.04 / Plesk como root o con sudo
 
 set -euo pipefail
 
-echo "== [POLÍTICA CANON v0.3.10] Provisión Inicial de Servidor =="
+echo "== [POLÍTICA CANON v0.3.11] Provisión Inicial de Servidor =="
 
-# 1. Crear usuario del sistema sin shell interactiva
+# 1. Crear usuario del sistema sin shell interactiva y asociar pertenencia de grupo postgres (B-02)
 if ! id -u politica-canon >/dev/null 2>&1; then
     echo "[+] Creando usuario de sistema 'politica-canon'..."
     useradd -r -s /bin/false politica-canon
+fi
+
+if id -u postgres >/dev/null 2>&1; then
+    echo "[+] Añadiendo usuario de sistema 'postgres' al grupo 'politica-canon'..."
+    usermod -aG politica-canon postgres
 fi
 
 # 2. Crear directorios de la aplicación, caché y configuración
@@ -19,11 +24,12 @@ mkdir -p /etc/politica-canon
 mkdir -p /var/log/politica-canon
 mkdir -p /root/politica-canon/backups
 
-# 3. Establecer permisos reproducibles (Modelo de Grupo / Permisos Atravesables)
-chmod 0755 /opt/politica-canon
-chmod 0755 /opt/politica-canon/app
-chown -R politica-canon:politica-canon /opt/politica-canon/app
-chown -R politica-canon:politica-canon /opt/politica-canon/.npm-cache
+# 3. Establecer permisos reproducibles por Modelo de Grupo Restringido (B-02: 0750 / 0640)
+chown -R politica-canon:politica-canon /opt/politica-canon
+chmod 0750 /opt/politica-canon
+chmod 0750 /opt/politica-canon/app
+find /opt/politica-canon/app -type d -exec chmod 0750 {} +
+find /opt/politica-canon/app -type f -exec chmod 0640 {} +
 chmod 0750 /opt/politica-canon/.npm-cache
 chown -R politica-canon:politica-canon /var/log/politica-canon
 chmod 0750 /var/log/politica-canon
@@ -71,7 +77,7 @@ fi
 
 # 6. Escribir /etc/politica-canon/runtime.env con permisos strictly root:politica-canon 0640 (Sin imprimir secretos)
 cat <<EOF > /etc/politica-canon/runtime.env
-# Configuración de tiempo de ejecución Política Canon v0.3.10
+# Configuración de tiempo de ejecución Política Canon v0.3.11
 NODE_ENV=production
 PORT=3000
 HOST=127.0.0.1
@@ -93,5 +99,6 @@ if [ -f /opt/politica-canon/app/deploy/systemd/politica-canon.service ]; then
     systemctl enable politica-canon
 fi
 
-echo "== [POLÍTICA CANON v0.3.10] Provisión completada exitosamente =="
+echo "== [POLÍTICA CANON v0.3.11] Provisión completada exitosamente =="
+
 

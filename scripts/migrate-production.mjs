@@ -22,7 +22,7 @@ function maskConnectionString(urlStr) {
 async function runMigration() {
   const dbUrl = process.env.MIGRATION_DATABASE_URL || process.env.POLITICA_CANON_DATABASE_URL || 'postgresql:///politica_canon?host=/var/run/postgresql';
 
-  console.log(`🚀 [MIGRADOR DDL v0.3.4] Conectando a PostgreSQL: ${maskConnectionString(dbUrl)}`);
+  console.log(`🚀 [MIGRADOR DDL v0.3.11] Conectando a PostgreSQL: ${maskConnectionString(dbUrl)}`);
 
   const client = new Client({ connectionString: dbUrl });
   let hasLock = false;

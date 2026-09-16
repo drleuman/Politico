@@ -2,7 +2,7 @@ import { execSync } from 'child_process';
 import pg from 'pg';
 const { Client } = pg;
 
-console.log('=== RUNNER DE INTEGRACIÓN REAL POSTGRESQL 16 & REDIS (v0.3.10 STRICT FAIL-CLOSED) ===\n');
+console.log('=== RUNNER DE INTEGRACIÓN REAL POSTGRESQL 16 & REDIS (v0.3.11 STRICT FAIL-CLOSED) ===\n');
 
 const ADMIN_URL = process.env.POLITICA_CANON_ADMIN_DATABASE_URL || 'postgresql://postgres:audit_dev_only_secret_do_not_use_in_prod@127.0.0.1:15432/politica_canon';
 const MIGRATION_URL = process.env.MIGRATION_DATABASE_URL || ADMIN_URL;
@@ -165,7 +165,7 @@ async function runIntegrationTest() {
     }
 
     console.log('✅ PROBES HTTP FASTIFY: GET /readyz = 200 {"status":"ready","database":"connected","redis":"connected"} CONFIRMADO EXITOSAMENTE.');
-    console.log('\n🎉 GATE DE INTEGRACIÓN REAL v0.3.9 COMPLETO Y CERTIFICADO');
+    console.log('\n🎉 GATE DE INTEGRACIÓN REAL v0.3.11 COMPLETO Y CERTIFICADO');
 
   } finally {
     // H-01 / C-03: Limpieza incondicional en bloque finally (SE GARANTIZA SU EJECUCIÓN AL LANZAR THROW EN LUGAR DE PROCESS.EXIT)

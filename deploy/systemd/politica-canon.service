@@ -1,5 +1,5 @@
 [Unit]
-Description=Politica Canon Monolith Service (v0.3.6)
+Description=Politica Canon Monolith Service (v0.3.7)
 After=network.target postgresql.service redis-server.service
 Wants=postgresql.service redis-server.service
 

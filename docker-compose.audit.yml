@@ -10,10 +10,6 @@ services:
       POSTGRES_PASSWORD: audit_dev_only_secret_do_not_use_in_prod
     ports:
       - "${POSTGRES_PORT:-15432}:5432"
-    volumes:
-      - ./db/0000_bootstrap_roles.sql:/docker-entrypoint-initdb.d/00_bootstrap_roles.sql
-      - ./db/migrations/0001_initial_schema.sql:/docker-entrypoint-initdb.d/01_initial_schema.sql
-      - ./db/0002_bootstrap_permissions.sql:/docker-entrypoint-initdb.d/02_bootstrap_permissions.sql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres -d politica_canon"]
       interval: 5s

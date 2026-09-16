@@ -4,6 +4,15 @@ Todas las modificaciones notables introducidas en este proyecto serán documenta
 
 El formato está basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.0.0/), y este proyecto adhiere a [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.17] - 2026-09-17
+
+### Remediado y Endurecido (Fase 1.1 Correctiva — Inmutabilidad de Release y Normalización CRLF)
+- **Emisión Canónica Inmutable (`package.json`, `validate_v0.3.17.cjs`):** Incrementada la versión a `0.3.17` tras la incorporación de la normalización CRLF multiplataforma en la verificación estática de hashes históricos.
+- **Normalización CRLF en Validación de Informes Históricos (`validate_v0.3.17.cjs`):** Aplicado `.replace(/\r\n/g, '\n')` previo al cálculo de hash SHA-256 de informes markdown históricos, garantizando determinismo exacto de validación tanto en Windows (CRLF) como en Linux/POSIX (LF).
+- **Pruebas de Clon Limpio (`scripts/test-integration-pg16.mjs`):** Verificación completa del candidato `v0.3.17` desde un clon independiente de la rama candidata.
+
+---
+
 ## [0.3.16] - 2026-09-16
 
 ### Remediado y Endurecido (Fase 1.1 Correctiva — Alineación de Scripts de Despliegue en package.json)

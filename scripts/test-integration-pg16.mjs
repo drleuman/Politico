@@ -2,7 +2,7 @@ import { execSync } from 'child_process';
 import pg from 'pg';
 const { Client } = pg;
 
-console.log('=== RUNNER DE INTEGRACIÓN REAL POSTGRESQL 16 & REDIS (v0.3.16 ADVERSARIAL FAIL-CLOSED) ===\n');
+console.log('=== RUNNER DE INTEGRACIÓN REAL POSTGRESQL 16 & REDIS (v0.3.17 ADVERSARIAL FAIL-CLOSED) ===\n');
 
 const ADMIN_URL = process.env.POLITICA_CANON_ADMIN_DATABASE_URL || 'postgresql://postgres:audit_dev_only_secret_do_not_use_in_prod@127.0.0.1:15432/politica_canon';
 const MIGRATION_URL = process.env.MIGRATION_DATABASE_URL || ADMIN_URL;
@@ -155,8 +155,8 @@ async function runIntegrationTest() {
       await adminClient.end();
     }
 
-    // VERIFICACIÓN CON SERVICIOS REALES FASTIFY (FASE 1.1: ADVERSARIAL SECURITY v0.3.16)
-    console.log('\n--- VERIFICACIÓN DE SEGURIDAD ADVERSARIAL FASE 1.1 (PG16 + REDIS 7 — RELEASE v0.3.16) ---');
+    // VERIFICACIÓN CON SERVICIOS REALES FASTIFY (FASE 1.1: ADVERSARIAL SECURITY v0.3.17)
+    console.log('\n--- VERIFICACIÓN DE SEGURIDAD ADVERSARIAL FASE 1.1 (PG16 + REDIS 7 — RELEASE v0.3.17) ---');
     
     // Crear Organización y Admin de Prueba directamente en la base de datos como bootstrap
     const { hashPassword } = await import('../dist/auth/crypto.js');
@@ -488,7 +488,7 @@ async function runIntegrationTest() {
     }
     console.log('✅ Auth API: Logout revocó la sesión correctamente en PostgreSQL.');
 
-    console.log('\n🎉 SUITE DE INTEGRACIÓN FASE 1.1 CORRECTIVA (v0.3.16) COMPLETA Y CERTIFICADA (PASS)');
+    console.log('\n🎉 SUITE DE INTEGRACIÓN FASE 1.1 CORRECTIVA (v0.3.17) COMPLETA Y CERTIFICADA (PASS)');
 
   } finally {
     if (fastifyApp) {

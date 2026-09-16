@@ -35,9 +35,9 @@ BEGIN
 
     -- 5. Rol Grupo de Despacho de Auditoría (audit_dispatcher)
     IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'audit_dispatcher') THEN
-        CREATE ROLE audit_dispatcher WITH NOLOGIN NOINHERIT NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS NOREPLICATION;
+        CREATE ROLE audit_dispatcher WITH NOLOGIN NOINHERIT NOSUPERUSER NOCREATEDB NOCREATEROLE BYPASSRLS NOREPLICATION;
     ELSE
-        ALTER ROLE audit_dispatcher WITH NOLOGIN NOINHERIT NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS NOREPLICATION;
+        ALTER ROLE audit_dispatcher WITH NOLOGIN NOINHERIT NOSUPERUSER NOCREATEDB NOCREATEROLE BYPASSRLS NOREPLICATION;
     END IF;
 
     -- 6. Rol de Conexión Runtime Específico del Servidor (politica_canon_app)
@@ -50,6 +50,17 @@ END $$;
 
 -- Enlazar la identidad de runtime al rol canónico app_user
 GRANT app_user TO politica_canon_app;
+
+-- Conceder app_owner a postgres para permitir SET ROLE app_owner en migraciones locales
+DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'postgres') THEN
+        GRANT app_owner TO postgres;
+    END IF;
+END $$;
+
+-- Garantizar permisos de creación DDL en esquema public para app_owner desde la Fase 1
+GRANT USAGE, CREATE ON SCHEMA public TO app_owner;
 
 -- Garantizar que app_user y politica_canon_app tengan RLS activado obligatoriamente
 ALTER ROLE app_user SET row_security = on;

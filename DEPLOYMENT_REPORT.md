@@ -1,11 +1,11 @@
-# Informe de Despliegue y Guía de Aprovisionamiento — Política Canon v0.3.3 (Fase 1 MVP)
+# Informe de Despliegue y Guía de Aprovisionamiento — Política Canon v0.3.4 (Fase 1 MVP)
 
 **Fecha:** 16 de septiembre de 2026  
 **Dominio Target:** `peaceful-johnson.194-164-175-146.plesk.page`  
 **Entorno de Servidor:** Plesk Obsidian 18.0.80 / Ubuntu 24.04.5 LTS  
 **Motor de Aplicación:** Node.js 22.23.2 / Fastify TypeScript Monolith  
 **Motores Canónicos de Persistencia:** PostgreSQL 16.15 / Redis 7.0.15  
-**Estado:** **Fase 1 MVP Remediado 100% y Aprobado para Despliegue v0.3.3**
+**Estado:** **Fase 1 MVP Remediado 100% y Aprobado para Despliegue v0.3.4**
 
 ---
 
@@ -32,7 +32,7 @@ sudo bash /opt/politica-canon/app/deploy/scripts/provision.sh
 
 ---
 
-### 2.2. Secuenciación de Base de Datos en 3 Fases (C-01, C-02, C-03, C-04, C-05)
+### 2.2. Secuenciación de Base de Datos en 3 Fases (C-01, C-02, C-03, H-01, H-02, H-03)
 
 #### Fase 1: Pre-Bootstrap de Roles (Ejecutado como usuario Unix `postgres` vía Socket Unix)
 ```bash
@@ -40,7 +40,7 @@ cd /opt/politica-canon/app
 sudo -u postgres npm run bootstrap:pre
 ```
 
-#### Fase 2: Copia de Seguridad y Migración DDL (Ejecutado por rol de migración `app_owner` mediante `SET ROLE`)
+#### Fase 2: Copia de Seguridad y Migración DDL (Ejecutado como conexión administrativa local con `SET ROLE app_owner`)
 ```bash
 # Copia de seguridad pre-migración
 sudo mkdir -p /root/politica-canon/backups
@@ -48,11 +48,11 @@ sudo chmod 0700 /root/politica-canon/backups
 sudo -u postgres pg_dump --format=custom --file=/root/politica-canon/backups/pre-migration-$(date +%Y%m%d_%H%M%S).dump politica_canon
 sudo chmod 0600 /root/politica-canon/backups/*.dump
 
-# Migración DDL idempotente con SET ROLE app_owner y Advisory Lock
-sudo -u politica-canon MIGRATION_DATABASE_URL="postgresql://politica_canon_app:<PASSWORD>@127.0.0.1:5432/politica_canon" npm run migrate:prod
+# Migración DDL administrativa con SET ROLE app_owner obligatorio y Advisory Lock
+sudo -u postgres MIGRATION_DATABASE_URL="postgresql:///politica_canon?host=/var/run/postgresql" npm run migrate:prod
 ```
 
-#### Fase 3: Post-Bootstrap de Propiedad, Permisos DML Mínimos y RLS (Ejecutado como usuario Unix `postgres` vía Socket Unix)
+#### Fase 3: Post-Bootstrap de Propiedad, Permisos DML Mínimos, Excepciones de Auditoría y RLS (Ejecutado como usuario Unix `postgres` vía Socket Unix)
 ```bash
 sudo -u postgres npm run bootstrap:post
 ```

@@ -4,6 +4,19 @@ Todas las modificaciones notables introducidas en este proyecto serán documenta
 
 El formato está basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.0.0/), y este proyecto adhiere a [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.4] - 2026-09-16
+
+### Añadido y Remediado (Dictamen Independiente de Predespliegue v0.3.3)
+- **Migración DDL Administrativa con SET ROLE Obligatorio y Fail-Closed (C-01):** Configurado `scripts/migrate-production.mjs` para autenticar vía socket Unix local / `MIGRATION_DATABASE_URL` administrativa, ejecutar obligatoriamente `SET ROLE app_owner;` y comprobar `current_user = 'app_owner'`. Se aborta inmediatamente (`process.exit(1)`) si `SET ROLE` o la aserción fallan, evitando que `politica_canon_app` cree objetos DDL.
+- **Restitución del Aislamiento del Despachador de Auditoría (C-02):** Restituido el atributo `BYPASSRLS` en `audit_dispatcher` dentro de `db/0000_bootstrap_roles.sql`. Asignada la propiedad de `get_pending_outbox_tenants()` explícitamente a `audit_dispatcher` y concedida su ejecución de forma **exclusiva** a `audit_worker` (revocado de `PUBLIC`, `app_user` y `politica_canon_app`).
+- **Transferencia de Propiedad por Firma Exacta (C-03):** Modificada la Fase 3 en `db/0002_bootstrap_permissions.sql` utilizando `pg_proc` y `pg_get_function_identity_arguments` para transferir firmas de funciones exactas a `app_owner`, preservando intencionalmente `get_pending_outbox_tenants()` bajo `audit_dispatcher`.
+- **Privilegios por Defecto para Futuras Funciones (H-01):** Incorporado `ALTER DEFAULT PRIVILEGES FOR ROLE app_owner REVOKE EXECUTE ON FUNCTIONS FROM PUBLIC;` y `ALTER DEFAULT PRIVILEGES REVOKE EXECUTE ON FUNCTIONS FROM PUBLIC;` en `db/0002_bootstrap_permissions.sql`.
+- **Matriz DML de Mínimos Privilegios en Tablas de Gobernanza (H-02):** Denegadas escrituras directas (`INSERT, UPDATE, DELETE`) en `organizations`, `workspaces`, `authority_bodies`, `authority_memberships`, `organization_memberships`, `users`, `role_assignments`, `decisions`, `decision_votes`, `publications`, `publication_events`, `audit_events` y `audit_outbox` para `app_user` y `politica_canon_app`.
+- **Inspección de Salud Aumentada en Runtime (H-03):** Ampliada la función `checkDatabaseHealth()` en `src/db/client.ts` para asertar `db_owner === 'app_owner'`, `schema_owner === 'app_owner'` y ausencia de privilegios `CREATE` en el rol runtime.
+- **Alineación de Metadatos y Pruebas HTTP (H-04, H-05):** Actualizados artefactos de despliegue a `v0.3.4` y arnés de pruebas integradas Fastify en `validate_v0.3.4.cjs` (`npm test`).
+
+---
+
 ## [0.3.3] - 2026-09-16
 
 ### Añadido y Remediado (Dictamen Independiente de Predespliegue v0.3.2)

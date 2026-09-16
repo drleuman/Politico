@@ -1,5 +1,5 @@
 [Unit]
-Description=Politica Canon Monolith Service (v0.3.9)
+Description=Politica Canon Monolith Service (v0.3.10)
 After=network.target postgresql.service redis-server.service
 Wants=postgresql.service redis-server.service
 
@@ -9,6 +9,7 @@ User=politica-canon
 Group=politica-canon
 WorkingDirectory=/opt/politica-canon/app
 EnvironmentFile=/etc/politica-canon/runtime.env
+Environment=NPM_CONFIG_CACHE=/opt/politica-canon/.npm-cache
 ExecStart=/usr/bin/node /opt/politica-canon/app/dist/server.js
 ExecReload=/bin/kill -HUP $MAINPID
 Restart=on-failure

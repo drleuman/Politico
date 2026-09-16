@@ -1,0 +1,10 @@
+﻿{
+    "version":  "0.3.10",
+    "releaseDate":  "2026-09-16",
+    "packageName":  "politica-canon-v0.3.10.zip",
+    "sizeBytes":  423393,
+    "sha256":  "3d8fe1860d0b672a1ca12c07df872c62b86e8fe8644ecb06518c7b69ad886e82",
+    "fileCount":  185,
+    "canonicalDatabaseEngine":  "PostgreSQL 16+",
+    "dictamen":  "PASS (RELEASE V0.3.10 AJUSTES ENTORNO REAL PLESK / UBUNTU 24.04 CODIFICADOS EN REPOSITORIO)"
+}

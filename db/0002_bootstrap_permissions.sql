@@ -1,7 +1,10 @@
 -- ============================================================================
--- FASE 3: POST-BOOTSTRAP DE PROPIEDAD, PERMISOS MÍNIMOS Y RLS (v0.3.5)
+-- FASE 3: POST-BOOTSTRAP DE PROPIEDAD, PERMISOS MÍNIMOS Y RLS (v0.3.10)
 -- Ejecutar exclusivamente como SUPERUSUARIO ('postgres') tras aplicar DDLs
 -- ============================================================================
+
+-- Concesión explícita de permiso de conexión a la base de datos para el rol runtime
+GRANT CONNECT ON DATABASE politica_canon TO politica_canon_app;
 
 -- 1. C-03: Transferencia de propiedad del esquema public a app_owner
 -- NOTA: ALTER DATABASE ... OWNER TO app_owner se ejecuta fuera de bloque transaccional en bootstrap-post.mjs (C-01)

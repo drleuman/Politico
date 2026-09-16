@@ -1,7 +1,10 @@
 -- ============================================================================
--- FASE 1: PRE-BOOTSTRAP DE ROLES Y GRUPOS DE SEGURIDAD CANÓNICOS (v0.3.3)
+-- FASE 1: PRE-BOOTSTRAP DE ROLES Y GRUPOS DE SEGURIDAD CANÓNICOS (v0.3.10)
 -- Ejecutar exclusivamente como SUPERUSUARIO ('postgres') antes de crear objetos
 -- ============================================================================
+
+-- Garantizar extensión pgcrypto de forma idempotente como superusuario postgres
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
 DO $$
 BEGIN

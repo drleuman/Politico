@@ -17,13 +17,13 @@ export async function checkDatabaseHealth(): Promise<{ ok: boolean; error?: stri
       const res = await client.query(`
         SELECT 
           current_user AS db_user, 
-          usesuper AS is_superuser, 
+          rolsuper AS is_superuser, 
           rolbypassrls AS bypass_rls,
           rolcreatedb AS can_create_db,
           rolcreaterole AS can_create_role,
           rolreplication AS can_replicate
-        FROM pg_user 
-        WHERE usename = current_user;
+        FROM pg_roles 
+        WHERE rolname = current_user;
       `);
       
       if (res.rows.length > 0) {

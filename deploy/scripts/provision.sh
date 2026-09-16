@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# Script de Provisión Inicial de Servidor — Política Canon v0.3.9
+# Script de Provisión Inicial de Servidor — Política Canon v0.3.10
 # Ejecutar en el servidor Ubuntu 24.04 / Plesk como root o con sudo
 
 set -euo pipefail
 
-echo "== [POLÍTICA CANON v0.3.9] Provisión Inicial de Servidor =="
+echo "== [POLÍTICA CANON v0.3.10] Provisión Inicial de Servidor =="
 
 # 1. Crear usuario del sistema sin shell interactiva
 if ! id -u politica-canon >/dev/null 2>&1; then
@@ -12,50 +12,80 @@ if ! id -u politica-canon >/dev/null 2>&1; then
     useradd -r -s /bin/false politica-canon
 fi
 
-# 2. Crear directorios de la aplicación y configuración
+# 2. Crear directorios de la aplicación, caché y configuración
 mkdir -p /opt/politica-canon/app
+mkdir -p /opt/politica-canon/.npm-cache
 mkdir -p /etc/politica-canon
 mkdir -p /var/log/politica-canon
+mkdir -p /root/politica-canon/backups
 
-# 3. Establecer permisos strictly
-chown -R politica-canon:politica-canon /opt/politica-canon
+# 3. Establecer permisos reproducibles (Modelo de Grupo / Permisos Atravesables)
+chmod 0755 /opt/politica-canon
+chmod 0755 /opt/politica-canon/app
+chown -R politica-canon:politica-canon /opt/politica-canon/app
+chown -R politica-canon:politica-canon /opt/politica-canon/.npm-cache
+chmod 0750 /opt/politica-canon/.npm-cache
 chown -R politica-canon:politica-canon /var/log/politica-canon
+chmod 0750 /var/log/politica-canon
+chmod 0700 /root/politica-canon/backups
 
-# 4. H-03: Derivar contraseña real si existe /root/politica-canon/runtime.env
-DB_PASS=""
+# 4. Derivar DATABASE_URL desde POLITICA_CANON_DATABASE_URL, DATABASE_URL o POLITICA_CANON_DB_PASS
+DERIVED_DB_URL=""
 if [ -f /root/politica-canon/runtime.env ]; then
-    DB_PASS=$(grep -E '^POLITICA_CANON_DB_PASS=' /root/politica-canon/runtime.env | cut -d'=' -f2- || true)
+    DERIVED_DB_URL=$(grep -E '^POLITICA_CANON_DATABASE_URL=' /root/politica-canon/runtime.env | cut -d'=' -f2- || true)
+    if [ -z "${DERIVED_DB_URL}" ]; then
+        DERIVED_DB_URL=$(grep -E '^DATABASE_URL=' /root/politica-canon/runtime.env | cut -d'=' -f2- || true)
+    fi
+    if [ -z "${DERIVED_DB_URL}" ]; then
+        DB_PASS=$(grep -E '^POLITICA_CANON_DB_PASS=' /root/politica-canon/runtime.env | cut -d'=' -f2- || true)
+        if [ -n "${DB_PASS}" ]; then
+            DERIVED_DB_URL="postgresql://politica_canon_app:${DB_PASS}@127.0.0.1:5432/politica_canon"
+        fi
+    fi
 fi
 
-# Fallar cerrado inmediatamente si el secreto no existe o está vacío (H-03)
-if [ -z "${DB_PASS}" ]; then
-    echo "❌ ERROR FATAL (H-03): No se pudo derivar la contraseña de la base de datos de /root/politica-canon/runtime.env (POLITICA_CANON_DB_PASS). Abortando por fallo cerrado sin crear runtime.env."
+# Si /etc/politica-canon/runtime.env ya existe, recuperar su DATABASE_URL si no se derivó una nueva
+if [ -z "${DERIVED_DB_URL}" ] && [ -f /etc/politica-canon/runtime.env ]; then
+    DERIVED_DB_URL=$(grep -E '^DATABASE_URL=' /etc/politica-canon/runtime.env | cut -d'=' -f2- || true)
+fi
+
+# Fallar cerrado inmediatamente si no existe una URL de base de datos válida
+if [ -z "${DERIVED_DB_URL}" ]; then
+    echo "❌ ERROR FATAL: No se pudo determinar la URL de la base de datos desde POLITICA_CANON_DATABASE_URL, DATABASE_URL o POLITICA_CANON_DB_PASS en /root/politica-canon/runtime.env. Abortando provisión."
     exit 1
 fi
 
-# 5. Generación segura del archivo runtime.env y secreto de sesión (32+ bytes)
-if [ ! -f /etc/politica-canon/runtime.env ]; then
-    echo "[+] Inicializando /etc/politica-canon/runtime.env..."
-    touch /etc/politica-canon/runtime.env
-    chown root:politica-canon /etc/politica-canon/runtime.env
-    chmod 0640 /etc/politica-canon/runtime.env
-    
-    RANDOM_SECRET=$(openssl rand -hex 32 || head -c 64 /dev/urandom | xxd -p | tr -d '\n')
-    
-    cat <<EOF > /etc/politica-canon/runtime.env
-# Configuración de tiempo de ejecución Política Canon v0.3.9
+# 5. Recuperar o generar SESSION_SECRET (32+ bytes / 64+ hex)
+EXISTING_SECRET=""
+if [ -f /etc/politica-canon/runtime.env ]; then
+    EXISTING_SECRET=$(grep -E '^SESSION_SECRET=' /etc/politica-canon/runtime.env | cut -d'=' -f2- || true)
+fi
+
+if [ -n "${EXISTING_SECRET}" ] && [ "${#EXISTING_SECRET}" -ge 32 ]; then
+    SESSION_SECRET="${EXISTING_SECRET}"
+    echo "[+] Preservando SESSION_SECRET existente válido."
+else
+    SESSION_SECRET=$(openssl rand -hex 32 || head -c 64 /dev/urandom | xxd -p | tr -d '\n')
+    echo "[+] Generado nuevo SESSION_SECRET de 32 bytes (64 hex)."
+fi
+
+# 6. Escribir /etc/politica-canon/runtime.env con permisos strictly root:politica-canon 0640 (Sin imprimir secretos)
+cat <<EOF > /etc/politica-canon/runtime.env
+# Configuración de tiempo de ejecución Política Canon v0.3.10
 NODE_ENV=production
 PORT=3000
 HOST=127.0.0.1
 APP_BASE_URL=https://peaceful-johnson.194-164-175-146.plesk.page
 REDIS_URL=redis://127.0.0.1:6379/0
-DATABASE_URL=postgresql://politica_canon_app:${DB_PASS}@127.0.0.1:5432/politica_canon
-SESSION_SECRET=${RANDOM_SECRET}
+DATABASE_URL=${DERIVED_DB_URL}
+SESSION_SECRET=${SESSION_SECRET}
 EOF
-    echo "[+] Secreto de sesión SESSION_SECRET (64 hex / 32+ bytes) generado automáticamente de forma segura."
-fi
 
-# 6. Instalar unidad de servicio systemd
+chown root:politica-canon /etc/politica-canon/runtime.env
+chmod 0640 /etc/politica-canon/runtime.env
+echo "[+] Archivo /etc/politica-canon/runtime.env configurado con propietario root:politica-canon y modo 0640."
+
+# 7. Instalar unidad de servicio systemd
 if [ -f /opt/politica-canon/app/deploy/systemd/politica-canon.service ]; then
     echo "[+] Instalando servicio systemd..."
     cp /opt/politica-canon/app/deploy/systemd/politica-canon.service /etc/systemd/system/
@@ -63,4 +93,5 @@ if [ -f /opt/politica-canon/app/deploy/systemd/politica-canon.service ]; then
     systemctl enable politica-canon
 fi
 
-echo "== [POLÍTICA CANON v0.3.9] Provisión completada exitosamente =="
+echo "== [POLÍTICA CANON v0.3.10] Provisión completada exitosamente =="
+

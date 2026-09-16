@@ -4,6 +4,19 @@ Todas las modificaciones notables introducidas en este proyecto serán documenta
 
 El formato está basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.0.0/), y este proyecto adhiere a [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.10] - 2026-09-16
+
+### Añadido y Remediado (Ajustes de Despliegue Real Plesk / Ubuntu 24.04)
+- **Compatibilidad de PostgreSQL en Sonda de Salud (`src/db/client.ts`):** Actualizada la consulta en `checkDatabaseHealth()` para consultar `pg_roles` (en lugar de `pg_user`) con nombres de columna de catálogo PostgreSQL 16 `rolsuper`, `rolbypassrls`, `rolcreatedb`, `rolcreaterole`, `rolreplication` y `rolname = current_user`.
+- **Concesión de Permiso de Conexión a Base de Datos (`db/0002_bootstrap_permissions.sql`):** Añadido `GRANT CONNECT ON DATABASE politica_canon TO politica_canon_app;` en el script post-bootstrap manteniendo el rol runtime `NOSUPERUSER` y `NOBYPASSRLS`.
+- **Extensión `pgcrypto` Pre-Bootstrap (`db/0000_bootstrap_roles.sql`):** Añadido `CREATE EXTENSION IF NOT EXISTS pgcrypto;` en el pre-bootstrap ejecutado como superusuario `postgres` previo a `SET ROLE app_owner`.
+- **Script de Provisión Idempotente (`deploy/scripts/provision.sh`):** Modificado para extraer la URL de base de datos desde `POLITICA_CANON_DATABASE_URL`, `DATABASE_URL` o `POLITICA_CANON_DB_PASS`, crear la carpeta de caché npm `/opt/politica-canon/.npm-cache`, aplicar el modelo de permisos atravesables de directorio (`0755`) y escribir `/etc/politica-canon/runtime.env` (modo `0640` `root:politica-canon`) sin imprimir secretos.
+- **Configuración Proxy Dual Nginx + Apache en Plesk (`deploy/plesk/vhost_nginx.conf` y `DEPLOYMENT_REPORT.md`):** Eliminado el bloque `location /` duplicado en Nginx para evitar el error `duplicate location "/"` de Plesk. Documentadas las directivas Apache `ProxyPass`/`ProxyPassReverse` con `RequestHeader set X-Forwarded-Proto`, permisos `0640` `root:nginx` para `htpasswd_politica_canon`, y comprobación HTTP 401/200.
+- **Patrón Seguro de Copia de Seguridad Pre-Migración (`DEPLOYMENT_REPORT.md`):** Actualizado el comando de backup a `sudo -u postgres pg_dump --format=custom politica_canon > "$backup"` con `chmod 0600` evitando problemas de permisos en `/root/`.
+- **Alineación de Versión y Calidad:** Actualizados metadatos del servicio systemd, landing page HTML y logs de servidor Fastify a `v0.3.10`.
+
+---
+
 ## [0.3.9] - 2026-09-16
 
 ### Añadido y Remediado (Dictamen Independiente de Predespliegue v0.3.8 / PASS Formal v0.3.9)

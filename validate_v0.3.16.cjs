@@ -150,7 +150,8 @@ async function runValidation() {
       console.log(`  -> Archivo histórico faltante: ${relPath}`);
       continue;
     }
-    const content = fs.readFileSync(relPath, 'utf8');
+    const rawContent = fs.readFileSync(relPath, 'utf8');
+    const content = rawContent.replace(/\r\n/g, '\n');
     const actualHash = crypto.createHash('sha256').update(content).digest('hex');
     if (actualHash !== expectedHash) {
       alteredFiles++;

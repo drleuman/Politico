@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# Script de Provisión Inicial de Servidor — Política Canon v0.3.2
+# Script de Provisión Inicial de Servidor — Política Canon v0.3.3
 # Ejecutar en el servidor Ubuntu 24.04 / Plesk como root o con sudo
 
 set -euo pipefail
 
-echo "== [POLÍTICA CANON v0.3.2] Provisión Inicial de Servidor =="
+echo "== [POLÍTICA CANON v0.3.3] Provisión Inicial de Servidor =="
 
 # 1. Crear usuario del sistema sin shell interactiva
 if ! id -u politica-canon >/dev/null 2>&1; then
@@ -21,14 +21,16 @@ mkdir -p /var/log/politica-canon
 chown -R politica-canon:politica-canon /opt/politica-canon
 chown -R politica-canon:politica-canon /var/log/politica-canon
 
-# 4. Derivar contraseña real si existe /root/politica-canon/runtime.env
+# 4. H-03: Derivar contraseña real si existe /root/politica-canon/runtime.env
 DB_PASS=""
 if [ -f /root/politica-canon/runtime.env ]; then
     DB_PASS=$(grep -E '^POLITICA_CANON_DB_PASS=' /root/politica-canon/runtime.env | cut -d'=' -f2- || true)
 fi
 
+# Fallar cerrado inmediatamente si el secreto no existe o está vacío (H-03)
 if [ -z "${DB_PASS}" ]; then
-    DB_PASS="CAMBIAR_POR_PASSWORD_REAL"
+    echo "❌ ERROR FATAL (H-03): No se pudo derivar la contraseña de la base de datos de /root/politica-canon/runtime.env (POLITICA_CANON_DB_PASS). Abortando por fallo cerrado sin crear runtime.env."
+    exit 1
 fi
 
 # 5. Generación segura del archivo runtime.env y secreto de sesión (32+ bytes)
@@ -41,7 +43,7 @@ if [ ! -f /etc/politica-canon/runtime.env ]; then
     RANDOM_SECRET=$(openssl rand -hex 32 || head -c 64 /dev/urandom | xxd -p | tr -d '\n')
     
     cat <<EOF > /etc/politica-canon/runtime.env
-# Configuración de tiempo de ejecución Política Canon v0.3.2
+# Configuración de tiempo de ejecución Política Canon v0.3.3
 NODE_ENV=production
 PORT=3000
 HOST=127.0.0.1
@@ -61,4 +63,4 @@ if [ -f /opt/politica-canon/app/deploy/systemd/politica-canon.service ]; then
     systemctl enable politica-canon
 fi
 
-echo "== [POLÍTICA CANON v0.3.2] Provisión completada exitosamente =="
+echo "== [POLÍTICA CANON v0.3.3] Provisión completada exitosamente =="

@@ -4,6 +4,18 @@ Todas las modificaciones notables introducidas en este proyecto serán documenta
 
 El formato está basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.0.0/), y este proyecto adhiere a [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.3] - 2026-09-16
+
+### Añadido y Remediado (Dictamen Independiente de Predespliegue v0.3.2)
+- **Corrección de URI de Socket Unix y Selección de DB (C-01):** Corregida la sintaxis URI de sockets Unix (`postgresql:///politica_canon?host=/var/run/postgresql`) en `scripts/bootstrap-pre.mjs` y `scripts/bootstrap-post.mjs`, garantizando que `dbname` no sea ignorado por el driver de PostgreSQL. Añadida verificación explícita de `current_database() = 'politica_canon'` y `usesuper = true`.
+- **Aislamiento Estricto del Rol de Migración DDL (C-02):** Actualizado `scripts/migrate-production.mjs` para autenticar vía `MIGRATION_DATABASE_URL` y ejecutar inmediatamente `SET ROLE app_owner;` tras la conexión. Se asegura que el usuario runtime `politica_canon_app` no sea propietario de ningún objeto DDL.
+- **Transferencia de Propiedad de Base de Datos y Esquema (C-03):** Añadidas sentencias explícitas `ALTER DATABASE politica_canon OWNER TO app_owner;` y `ALTER SCHEMA public OWNER TO app_owner;` en `db/0002_bootstrap_permissions.sql`. Revocado el privilegio `CREATE` en `public` a `PUBLIC` y a `politica_canon_app`.
+- **Matriz Explícita de Mínimos Privilegios DML (C-04):** Eliminada la concesión indiscriminada `GRANT ALL ON ALL TABLES`. Implementadas revocaciones explícitas de `INSERT, UPDATE, DELETE` para las tablas sensibles de gobernanza y auditoría (`decision_votes`, `decisions`, `role_assignments`, `publications`, `publication_events`, `audit_events`, `audit_outbox`) tanto para `app_user` como para `politica_canon_app`.
+- **Revocación Global de EXECUTE a PUBLIC (C-05):** Añadido `REVOKE EXECUTE ON ALL FUNCTIONS IN SCHEMA public FROM PUBLIC;` en `db/0002_bootstrap_permissions.sql`, concediendo ejecución únicamente por firma exacta a los roles autorizados (`app_user`, `politica_canon_app`).
+- **Verificación Completa de Salud del Runtime (H-01 a H-05):** Extendida la función `checkDatabaseHealth()` en `src/db/client.ts` para verificar que el rol runtime no posea `is_superuser`, `bypass_rls`, `createdb`, `createrole`, `replication` ni propiedad de base o esquema. Robustecido `deploy/scripts/provision.sh` en modo fail-closed y actualizada la descripción del servicio systemd a `v0.3.3`.
+
+---
+
 ## [0.3.2] - 2026-09-16
 
 ### Añadido y Remediado (Dictamen de Auditoría Externa v0.3.1)

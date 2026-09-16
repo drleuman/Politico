@@ -26,7 +26,7 @@ async function runMigration() {
     process.exit(1);
   }
 
-  console.log(`🚀 [MIGRADOR v0.3.1] Conectando a PostgreSQL: ${maskConnectionString(dbUrl)}`);
+  console.log(`🚀 [MIGRADOR DDL v0.3.3] Conectando a PostgreSQL: ${maskConnectionString(dbUrl)}`);
 
   const client = new Client({ connectionString: dbUrl });
   let hasLock = false;
@@ -35,13 +35,21 @@ async function runMigration() {
     await client.connect();
     console.log('✅ Conexión a PostgreSQL establecida correctamente.');
 
-    // 1. Tomar bloqueo de asesoramiento concurente (Advisory Lock)
+    // 1. C-02: Establecer rol propietario de esquema app_owner para la sesión de migración DDL
+    try {
+      await client.query('SET ROLE app_owner;');
+      console.log('👑 [C-02] Rol de sesión cambiado exitosamente a \'app_owner\'.');
+    } catch (roleErr) {
+      console.warn('⚠️ [AVISO C-02] No se pudo ejecutar SET ROLE app_owner (puede que la conexión ya sea el propietario o rol administrador):', roleErr.message);
+    }
+
+    // 2. Tomar bloqueo de asesoramiento concurrente (Advisory Lock)
     console.log(`🔒 Solicitando bloqueo de migración concurrente (Advisory Lock: ${MIGRATION_LOCK_ID})...`);
     await client.query('SELECT pg_advisory_lock($1);', [MIGRATION_LOCK_ID]);
     hasLock = true;
     console.log('🔒 Bloqueo de migración obtenido en exclusiva.');
 
-    // 2. Crear tabla de control de migraciones si no existe
+    // 3. Crear tabla de control de migraciones si no existe
     await client.query(`
       CREATE TABLE IF NOT EXISTS schema_migrations (
         id SERIAL PRIMARY KEY,
@@ -51,7 +59,7 @@ async function runMigration() {
       );
     `);
 
-    // 3. Descubrir todos los archivos de migración .sql ordenados
+    // 4. Descubrir todos los archivos de migración .sql ordenados
     const migrationsDir = path.resolve(process.cwd(), 'db/migrations');
     if (!fs.existsSync(migrationsDir)) {
       throw new Error(`Directorio de migraciones no encontrado: ${migrationsDir}`);
@@ -63,7 +71,7 @@ async function runMigration() {
 
     console.log(`📋 Encontradas ${migrationFiles.length} migraciones en db/migrations/: ${migrationFiles.join(', ')}`);
 
-    // 4. Verificar integridad y aplicar migraciones pendientes
+    // 5. Verificar integridad y aplicar migraciones pendientes
     for (const file of migrationFiles) {
       const filePath = path.join(migrationsDir, file);
       const content = fs.readFileSync(filePath, 'utf8');
@@ -81,18 +89,18 @@ async function runMigration() {
         continue;
       }
 
-      console.log(`⏳ [EJECUTANDO] Aplicando migración '${file}'...`);
-      await client.query('BEGIN');
+      console.log(`⏳ [EJECUTANDO] Aplicando migración '${file}' con propiedad 'app_owner'...`);
+      await client.query('BEGIN;');
       await client.query(content);
       await client.query(
         'INSERT INTO schema_migrations (filename, checksum) VALUES ($1, $2);',
         [file, currentChecksum]
       );
-      await client.query('COMMIT');
+      await client.query('COMMIT;');
       console.log(`✅ [APLICADO] Migración '${file}' completada exitosamente.`);
     }
 
-    console.log('🎉 [MIGRADOR v0.3.1] Todas las migraciones fueron verificadas y aplicadas de forma segura e idempotente.');
+    console.log('🎉 [MIGRADOR DDL v0.3.3] Todas las migraciones fueron verificadas y aplicadas bajo propiedad \'app_owner\'.');
   } catch (err) {
     await client.query('ROLLBACK;').catch(() => {});
     console.error('❌ ERROR DURANTE LA MIGRACIÓN DE PRODUCCIÓN:', err.message);

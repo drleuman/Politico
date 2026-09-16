@@ -1,11 +1,11 @@
-# Informe de Despliegue y Guía de Aprovisionamiento — Política Canon v0.3.2 (Fase 1 MVP)
+# Informe de Despliegue y Guía de Aprovisionamiento — Política Canon v0.3.3 (Fase 1 MVP)
 
 **Fecha:** 16 de septiembre de 2026  
 **Dominio Target:** `peaceful-johnson.194-164-175-146.plesk.page`  
 **Entorno de Servidor:** Plesk Obsidian 18.0.80 / Ubuntu 24.04.5 LTS  
 **Motor de Aplicación:** Node.js 22.23.2 / Fastify TypeScript Monolith  
 **Motores Canónicos de Persistencia:** PostgreSQL 16.15 / Redis 7.0.15  
-**Estado:** **Fase 1 MVP Remediado 100% y Aprobado para Despliegue v0.3.2**
+**Estado:** **Fase 1 MVP Remediado 100% y Aprobado para Despliegue v0.3.3**
 
 ---
 
@@ -17,7 +17,7 @@
 - **PostgreSQL:** 16.15 (Limitado a `127.0.0.1` / `::1`)
 - **Redis:** 7.0.15 (Limitado a `127.0.0.1` / `::1`)
 - **Base de Datos:** `politica_canon`
-- **Rol Runtime PostgreSQL:** `politica_canon_app` (Conexiones máx 10, pertenece a `app_user`, `NOSUPERUSER`, `NOBYPASSRLS`)
+- **Rol Runtime PostgreSQL:** `politica_canon_app` (Conexiones máx 10, pertenece a `app_user`, `NOSUPERUSER`, `NOBYPASSRLS`, no propietario de objetos ni base)
 
 ---
 
@@ -32,15 +32,15 @@ sudo bash /opt/politica-canon/app/deploy/scripts/provision.sh
 
 ---
 
-### 2.2. Secuenciación de Base de Datos en 3 Fases (C-01, C-02)
+### 2.2. Secuenciación de Base de Datos en 3 Fases (C-01, C-02, C-03, C-04, C-05)
 
-#### Fase 1: Pre-Bootstrap de Roles (Ejecutado como usuario Unix `postgres`)
+#### Fase 1: Pre-Bootstrap de Roles (Ejecutado como usuario Unix `postgres` vía Socket Unix)
 ```bash
 cd /opt/politica-canon/app
 sudo -u postgres npm run bootstrap:pre
 ```
 
-#### Fase 2: Copia de Seguridad y Migración DDL (Ejecutado por rol de migración)
+#### Fase 2: Copia de Seguridad y Migración DDL (Ejecutado por rol de migración `app_owner` mediante `SET ROLE`)
 ```bash
 # Copia de seguridad pre-migración
 sudo mkdir -p /root/politica-canon/backups
@@ -48,11 +48,11 @@ sudo chmod 0700 /root/politica-canon/backups
 sudo -u postgres pg_dump --format=custom --file=/root/politica-canon/backups/pre-migration-$(date +%Y%m%d_%H%M%S).dump politica_canon
 sudo chmod 0600 /root/politica-canon/backups/*.dump
 
-# Migración DDL idempotente con Advisory Lock
-sudo -u politica-canon npm run migrate:prod
+# Migración DDL idempotente con SET ROLE app_owner y Advisory Lock
+sudo -u politica-canon MIGRATION_DATABASE_URL="postgresql://politica_canon_app:<PASSWORD>@127.0.0.1:5432/politica_canon" npm run migrate:prod
 ```
 
-#### Fase 3: Post-Bootstrap de Propiedad, Permisos DML y RLS (Ejecutado como usuario Unix `postgres`)
+#### Fase 3: Post-Bootstrap de Propiedad, Permisos DML Mínimos y RLS (Ejecutado como usuario Unix `postgres` vía Socket Unix)
 ```bash
 sudo -u postgres npm run bootstrap:post
 ```
@@ -101,32 +101,21 @@ location / {
 
 ---
 
-## 3. Comandos de Validación y Control Obligatorios
+## 3. Plan de Verificación Post-Despliegue y Rollback
 
+### 3.1. Verificación en Vivo (Smoke Test)
 ```bash
-# 1. Verificación de compilación y arnés de pruebas autocontenido (C-01)
-cd /opt/politica-canon/app
-sudo -u politica-canon npm test
+# Probes locales de disponibilidad
+curl -sS http://127.0.0.1:3000/healthz | grep '"status":"ok"'
+curl -sS http://127.0.0.1:3000/readyz | grep '"status":"ready"'
 
-# 2. Verificación de servicios activos
-systemctl is-active postgresql redis-server politica-canon
-
-# 3. Verificación de probes HTTP locales (Liveness & Readiness)
-curl -fsS http://127.0.0.1:3000/healthz
-curl -fsS http://127.0.0.1:3000/readyz
-
-# 4. Verificación de HTTPS y Autenticación Nginx
-curl -fsSI https://peaceful-johnson.194-164-175-146.plesk.page
-
-# 5. Verificación de aislamiento de red (Loopback 127.0.0.1 solamente)
-ss -lntp | grep -E '3000|5432|6379'
+# Verificación HTTPS con autenticación Nginx
+curl -sI https://peaceful-johnson.194-164-175-146.plesk.page/ | grep "401 Unauthorized"
+curl -u admin:<PASSWORD> -sS https://peaceful-johnson.194-164-175-146.plesk.page/ | grep "Intranet"
 ```
 
----
-
-## 4. Garantía de Aislamiento y Política de Cero Fugas
-
-- Cero contraseñas ni variables con secretos en el repositorio ni documentación.
-- Fastify escucha exclusivamente en `127.0.0.1:3000` con `trustProxy: true`.
-- PostgreSQL (5432) y Redis (6379) permanecen estrictamente limitados a `127.0.0.1`.
-- Rol runtime `politica_canon_app` opera bajo principio de mínimo privilegio (`NOSUPERUSER`, `NOBYPASSRLS`).
+### 3.2. Procedimiento de Emergencia (Rollback)
+```bash
+sudo systemctl stop politica-canon
+sudo -u postgres pg_restore --clean --dbname=politica_canon /root/politica-canon/backups/<ULTIMO_DUMP>.dump
+```

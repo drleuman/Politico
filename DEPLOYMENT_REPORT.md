@@ -1,11 +1,12 @@
-# Informe de Despliegue y Guía de Aprovisionamiento — Política Canon v0.3.11 (Fase 1 MVP)
+# Informe de Despliegue y Guía de Aprovisionamiento — Política Canon v0.3.17 (Fase 1.1)
 
-**Fecha:** 16 de septiembre de 2026  
+**Fecha de Despliegue en Producción:** 17 de septiembre de 2026  
+**Commit / Tag Desplegado:** Tag `v0.3.17` (`ed74688`)  
 **Dominio Target:** `peaceful-johnson.194-164-175-146.plesk.page`  
 **Entorno de Servidor:** Plesk Obsidian 18.0.80 / Ubuntu 24.04.5 LTS  
 **Motor de Aplicación:** Node.js 22.23.2 / Fastify TypeScript Monolith  
 **Motores Canónicos de Persistencia:** PostgreSQL 16.15 / Redis 7.0.15  
-**Estado:** **Fase 1 MVP Remediado 100% y Aprobado para Despliegue v0.3.11**
+**Estado de Producción:** **DESPLEGADO Y VERIFICADO EN VIVO 100% (PASS — v0.3.17)**
 
 ---
 
@@ -164,5 +165,35 @@ curl -u admin:<PASSWORD> -sI https://peaceful-johnson.194-164-175-146.plesk.page
 sudo systemctl stop politica-canon
 sudo -u postgres pg_restore --clean --dbname=politica_canon /root/politica-canon/backups/<ULTIMO_DUMP>.dump
 ```
+
+---
+
+## 5. Registro de Evidencia de Despliegue en Producción — Release v0.3.17
+
+- **Fecha y Hora de Ejecución:** 17 de septiembre de 2026
+- **Tag Desplegado:** `v0.3.17` (Commit `ed74688` en `main`)
+- **Copia de Seguridad Pre-Migración Realizada:**
+  - Archivo: `/root/politica-canon/backups/pre-v0.3.17-20260916_224717.dump`
+  - SHA-256: `cf3488738545b9cb9b78428a4ff70fc1ad3c43fb081045f9ff3d86c8d18e19ac`
+- **Migraciones DDL Aplicadas:**
+  - `0001_initial_schema.sql` (Verificada por checksum previo)
+  - `0003_fase_1_1_identity_rbac.sql` (Aplicada exitosamente)
+  - `0004_fase_1_1_token_resolver_fix.sql` (Aplicada exitosamente)
+- **Verificación de Seguridad Post-Bootstrap:**
+  - Propiedad de BD asignada autoritativamente a `app_owner`.
+  - Permisos mínimos DML revocados/concedidos a `app_user`.
+  - Imposición estricta de FORCE RLS activa en tablas de aplicación.
+  - Membresía temporal del rol resolver revocada.
+- **Gestión de Caché de Construcción npm:**
+  - Uso exclusivo de `/opt/politica-canon/.npm-cache` (modo `0750`, propietario `politica-canon:politica-canon`).
+  - Sin creación de directorio home interactivo ni alteración de permisos del sistema.
+- **Resultados de Verificación Probes & Red:**
+  - Servicio `politica-canon.service`: `active (running)`.
+  - `/healthz`: HTTP 200 OK (`{"status":"ok"}`).
+  - `/readyz`: HTTP 200 OK (`{"status":"ready"}` con PostgreSQL 16 y Redis 7 conectados).
+  - Pasarela HTTPS (Nginx): HTTP 401 Unauthorized sin credenciales HTTP Basic.
+  - Aislamiento de Red: Puertos `3000`, `5432` y `6379` enlazados exclusivamente a `127.0.0.1` / `::1`.
+  - Integridad de Host: Sin instalación de Docker, sin cambios en Kernel, MariaDB ni Plesk.
+
 
 

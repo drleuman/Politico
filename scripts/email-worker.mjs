@@ -17,7 +17,7 @@ const workerPool = new Pool({
   connectionTimeoutMillis: 5000,
 });
 
-console.log('=== WORKER AUTÓNOMO DE CORREO ELECTRÓNICO OUTBOX — POLÍTICA CANON v0.3.28 ===');
+console.log('=== WORKER AUTÓNOMO DE CORREO ELECTRÓNICO OUTBOX — POLÍTICA CANON v0.3.29 ===');
 
 let running = true;
 const workerId = `email-worker-${process.pid}`;

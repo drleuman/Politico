@@ -1,17 +1,18 @@
 {
   "name": "politica-canon",
-  "version": "0.3.28",
-  "description": "Monolito Fastify, Identidad, Invitaciones Privadas, Usuarios, Sesiones y RBAC/ABAC — Política Canon v0.3.28 (Fase 1.1 Funcional Remediada Certificada)",
+  "version": "0.3.29",
+  "description": "Monolito Fastify, Identidad, Invitaciones Privadas, Usuarios, Sesiones y RBAC/ABAC — Política Canon v0.3.29 (Fase 1.1 Funcional Remediada Certificada)",
   "type": "module",
   "main": "dist/server.js",
   "scripts": {
     "build": "tsc --build",
     "start": "node dist/server.js",
     "dev": "tsx watch src/server.ts",
-    "bootstrap:pre": "node scripts/bootstrap-pre.mjs",
-    "migrate:prod": "node scripts/migrate-production.mjs",
-    "bootstrap:post": "node scripts/bootstrap-post.mjs",
-    "test": "npm run build && node scripts/test-integration-pg16.mjs && node validate_v0.3.28.cjs"
+    "typecheck": "tsc --noEmit",
+    "db:bootstrap": "node scripts/bootstrap-pre.mjs && npx drizzle-kit push && node scripts/bootstrap-post.mjs",
+    "db:migrate": "node scripts/migrate-production.mjs",
+    "email-worker": "node scripts/email-worker.mjs",
+    "test": "npm run build && node scripts/test-integration-pg16.mjs && node validate_v0.3.29.cjs"
   },
   "devDependencies": {
     "@electric-sql/pglite": "^0.5.8",

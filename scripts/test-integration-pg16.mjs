@@ -3,7 +3,7 @@ import pg from 'pg';
 import http from 'http';
 const { Client } = pg;
 
-console.log('=== RUNNER DE INTEGRACIÓN REAL POSTGRESQL 16, REDIS 7 & MAILPIT SMTP (v0.3.29 CERTIFICADO) ===\n');
+console.log('=== RUNNER DE INTEGRACIÓN REAL POSTGRESQL 16, REDIS 7 & MAILPIT SMTP (v0.3.30 CERTIFICADO) ===\n');
 
 const ADMIN_URL = process.env.POLITICA_CANON_ADMIN_DATABASE_URL || 'postgresql://postgres:audit_dev_only_secret_do_not_use_in_prod@127.0.0.1:15432/politica_canon';
 const MIGRATION_URL = process.env.MIGRATION_DATABASE_URL || ADMIN_URL;
@@ -156,6 +156,7 @@ async function runIntegrationTest() {
         throw new Error(`H-05 Test FAIL: email_worker no convergió tras re-ejecutar bootstrap-pre.mjs. Obtenido: createrole=${conv.rolcreaterole}, createdb=${conv.rolcreatedb}.`);
       }
       console.log("✅ H-05 Pruebas de Convergencia: email_worker degradado deliberadamente con CREATEROLE/CREATEDB convergió de nuevo al estado canónico de mínimos privilegios (rolcreaterole=false, rolcreatedb=false).");
+      runScript('scripts/bootstrap-post.mjs');
 
       console.log('\n--- ASERCIONES DE CATÁLOGO PG16 REAL (RONDA ' + round + ') ---');
       const ownerCheck = await adminClient.query("SELECT pg_catalog.pg_get_userbyid(datdba) AS db_owner FROM pg_catalog.pg_database WHERE datname = 'politica_canon';");
@@ -197,8 +198,8 @@ async function runIntegrationTest() {
       await adminClient.end();
     }
 
-    // VERIFICACIÓN CON SERVICIOS REALES FASTIFY (FASE 1.1: ADVERSARIAL SECURITY v0.3.29)
-    console.log('\n--- VERIFICACIÓN DE SEGURIDAD ADVERSARIAL FASE 1.1 (PG16 + REDIS 7 + MAILPIT SMTP — RELEASE v0.3.29) ---');
+    // VERIFICACIÓN CON SERVICIOS REALES FASTIFY (FASE 1.1: ADVERSARIAL SECURITY v0.3.30)
+    console.log('\n--- VERIFICACIÓN DE SEGURIDAD ADVERSARIAL FASE 1.1 (PG16 + REDIS 7 + MAILPIT SMTP — RELEASE v0.3.30) ---');
     
     const { hashPassword } = await import('../dist/auth/crypto.js');
     
@@ -233,10 +234,15 @@ async function runIntegrationTest() {
     fastifyApp = buildServer();
     await fastifyApp.ready();
 
-    // 1. Probe de Salud con Estado SMTP
-    const readyRes = await fastifyApp.inject({ method: 'GET', url: '/readyz' });
+    // 1. Probe de Salud con Estado SMTP (con reintentos para dar tiempo al binding del puerto SMTP)
+    let readyRes = null;
+    for (let i = 0; i < 15; i++) {
+      readyRes = await fastifyApp.inject({ method: 'GET', url: '/readyz' });
+      if (readyRes.statusCode === 200) break;
+      await new Promise(r => setTimeout(r, 500));
+    }
     if (readyRes.statusCode !== 200) {
-      throw new Error(`GET /readyz devolvió HTTP ${readyRes.statusCode}, se requiere 200.`);
+      throw new Error(`GET /readyz devolvió HTTP ${readyRes.statusCode}, se requiere 200. Response: ${readyRes.payload}`);
     }
     console.log('✅ Probe Fastify /readyz: HTTP 200 OK (PostgreSQL 16, Redis 7 y Mailpit SMTP verificados).');
 
@@ -384,8 +390,8 @@ async function runIntegrationTest() {
       INSERT INTO user_credentials (user_id, password_hash, password_algo) VALUES ('${resetUserId}', '${resetUserPassHash}', 'argon2id') ON CONFLICT (user_id) DO UPDATE SET password_hash = '${resetUserPassHash}';
       
       -- Membresías en DOS organizaciones distintas (orgId y otherOrgId)
-      INSERT INTO organization_memberships (organization_id, user_id, is_active) VALUES ('${orgId}', '${resetUserId}', TRUE) ON CONFLICT (organization_id, user_id) DO NOTHING;
-      INSERT INTO organization_memberships (organization_id, user_id, is_active) VALUES ('${otherOrgId}', '${resetUserId}', TRUE) ON CONFLICT (organization_id, user_id) DO NOTHING;
+      INSERT INTO organization_memberships (organization_id, user_id, is_active, valid_from) VALUES ('${orgId}', '${resetUserId}', TRUE, NOW() - INTERVAL '1 minute') ON CONFLICT (organization_id, user_id) DO UPDATE SET is_active = TRUE, valid_from = NOW() - INTERVAL '1 minute';
+      INSERT INTO organization_memberships (organization_id, user_id, is_active, valid_from) VALUES ('${otherOrgId}', '${resetUserId}', TRUE, NOW() - INTERVAL '1 minute') ON CONFLICT (organization_id, user_id) DO UPDATE SET is_active = TRUE, valid_from = NOW() - INTERVAL '1 minute';
       
       INSERT INTO role_assignments (organization_id, scope_type, scope_id, target_user_id, assigned_role, is_active)
       VALUES ('${orgId}', 'ORGANIZATION', '${orgId}', '${resetUserId}', 'WRITER', TRUE) ON CONFLICT DO NOTHING;
@@ -427,7 +433,7 @@ async function runIntegrationTest() {
       const pendingRows = await workerClientPending.query("SELECT payload FROM email_outbox WHERE status = 'PENDING' ORDER BY id DESC LIMIT 1;");
       if (pendingRows.rows.length > 0) {
         const payload = pendingRows.rows[0].payload;
-        if (payload.token && !payload.token.startsWith('enc:')) {
+        if (payload.token && (!payload.token.startsWith('v1:enc:') && !payload.token.startsWith('enc:'))) {
           throw new Error(`H-01 Test FAIL: El token en reposo PENDING no está cifrado. Payload: ${JSON.stringify(payload)}`);
         }
         console.log("✅ H-01 Cifrado en Reposo: Token en estado PENDING almacenado con cifrado AES-256-GCM (enc:...).");
@@ -479,7 +485,7 @@ async function runIntegrationTest() {
     console.log('✅ H-04 Seguridad: Secreto de token redactado a [REDACTED] en email_outbox tras envío exitoso.');
 
     // Verificar que el evento de auditoría PASSWORD_RESET_COMPLETED fue registrado
-    const auditRes = await dbClientC01.query(`SELECT event_type FROM security_audit_events WHERE actor_id = '${resetUserId}' AND event_type = 'PASSWORD_RESET_COMPLETED'`);
+    const auditRes = await dbClientC01.query(`SELECT event_type FROM audit_outbox WHERE actor_id = '${resetUserId}' AND event_type = 'PASSWORD_RESET_COMPLETED'`);
     if (auditRes.rows.length === 0) {
       throw new Error('CRITICAL FAIL C-01: Evento de auditoría PASSWORD_RESET_COMPLETED no registrado tras reset.');
     }
@@ -542,16 +548,25 @@ async function runIntegrationTest() {
     // 10. C-03 & H-02 PRUEBA DE OUTBOX CON WORKER DEDICADO Y REDACCIÓN TERMINAL EN ESTADO FAILED
     console.log('\n--- PRUEBA E2E C-01, C-03 & H-02: OUTBOX CON WORKER DEDICADO Y REDACCIÓN TERMINAL FAILED ---');
     const { enqueueEmail } = await import('../dist/email/outbox.js');
+    const { resetTransporterForTesting } = await import('../dist/email/adapter.js');
     await enqueueEmail(dbPool, 'inexistente@invalid-smtp-target.local', 'INVITATION', { token: 'test-token-invalid-smtp', tenantName: 'Test' });
     
-    // Forzar 5 reintentos fallidos para probar transición a FAILED y redacción de token en reposo
-    for (let attempt = 1; attempt <= 5; attempt++) {
-      const adminDbForRetry = new Client({ connectionString: ADMIN_URL });
-      await adminDbForRetry.connect();
-      await adminDbForRetry.query("UPDATE email_outbox SET next_attempt_at = NOW() - INTERVAL '1 minute' WHERE recipient = 'inexistente@invalid-smtp-target.local';");
-      await adminDbForRetry.end();
+    // Forzar 5 reintentos fallidos apuntando temporalmente a un puerto SMTP inválido para probar transición a FAILED y redacción de token en reposo
+    const origSmtpPort = process.env.SMTP_PORT;
+    process.env.SMTP_PORT = '19999';
+    resetTransporterForTesting();
+    try {
+      for (let attempt = 1; attempt <= 5; attempt++) {
+        const adminDbForRetry = new Client({ connectionString: ADMIN_URL });
+        await adminDbForRetry.connect();
+        await adminDbForRetry.query("UPDATE email_outbox SET next_attempt_at = NOW() - INTERVAL '1 minute' WHERE recipient = 'inexistente@invalid-smtp-target.local';");
+        await adminDbForRetry.end();
 
-      await processEmailOutbox(emailWorkerPool, 'worker-retry-test');
+        await processEmailOutbox(emailWorkerPool, 'worker-retry-test');
+      }
+    } finally {
+      process.env.SMTP_PORT = origSmtpPort || '11025';
+      resetTransporterForTesting();
     }
 
     const adminDbCheckFailed = new Client({ connectionString: ADMIN_URL });
@@ -655,24 +670,6 @@ async function runIntegrationTest() {
     });
     if (verifyTotpRes.statusCode !== 200) throw new Error(`MFA Step-up TOTP falló: ${verifyTotpRes.payload}`);
 
-    // H-02 Rate Limiting MFA: probar intento repetido de TOTP inválido
-    let lastCodeRes = null;
-    for (let attempt = 1; attempt <= 6; attempt++) {
-      lastCodeRes = await fastifyApp.inject({
-        method: 'POST',
-        url: '/api/v1/auth/mfa/verify',
-        headers: {
-          cookie: `__Host-sid=${mfaSessionCookie}; csrf=${mfaCsrfCookie}`,
-          'x-csrf-token': mfaCsrfCookie,
-        },
-        payload: { code: '000000' }
-      });
-    }
-    if (lastCodeRes.statusCode !== 530 && lastCodeRes.statusCode !== 429 && lastCodeRes.statusCode !== 400) {
-      throw new Error(`Rate limit MFA no respondió con bloqueo esperado (HTTP ${lastCodeRes.statusCode}).`);
-    }
-    console.log('✅ H-02 Rate Limiting MFA: Bloqueo de intentos fallidos repetidos verificado correctamente.');
-
     // Step-up verification con código de respaldo (consumo atómico)
     const backupCodeToUse = backupCodes[0];
     const verifyBackupRes = await fastifyApp.inject({
@@ -703,6 +700,24 @@ async function runIntegrationTest() {
     }
     console.log('✅ MFA E2E: Consumo atómico de backup code verificado (no reutilizable).');
 
+    // H-02 Rate Limiting MFA: probar intento repetido de TOTP inválido
+    let lastCodeRes = null;
+    for (let attempt = 1; attempt <= 6; attempt++) {
+      lastCodeRes = await fastifyApp.inject({
+        method: 'POST',
+        url: '/api/v1/auth/mfa/verify',
+        headers: {
+          cookie: `__Host-sid=${mfaSessionCookie}; csrf=${mfaCsrfCookie}`,
+          'x-csrf-token': mfaCsrfCookie,
+        },
+        payload: { code: '000000' }
+      });
+    }
+    if (lastCodeRes.statusCode !== 530 && lastCodeRes.statusCode !== 429 && lastCodeRes.statusCode !== 400) {
+      throw new Error(`Rate limit MFA no respondió con bloqueo esperado (HTTP ${lastCodeRes.statusCode}).`);
+    }
+    console.log('✅ H-02 Rate Limiting MFA: Bloqueo de intentos fallidos repetidos verificado correctamente.');
+
     // Desactivar MFA (POST /api/v1/auth/mfa/disable)
     const disableRes = await fastifyApp.inject({
       method: 'POST',
@@ -720,7 +735,7 @@ async function runIntegrationTest() {
 
     await dbClientC02.end();
 
-    console.log('\n🎉 SUITE DE INTEGRACIÓN FASE 1.1 REMEDIADA (v0.3.29) COMPLETA Y CERTIFICADA (PASS)');
+    console.log('\n🎉 SUITE DE INTEGRACIÓN FASE 1.1 REMEDIADA (v0.3.30) COMPLETA Y CERTIFICADA (PASS)');
 
   } finally {
     if (fastifyApp) {

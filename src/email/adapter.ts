@@ -18,6 +18,10 @@ export function clearSentEmailsForTesting(): void {
   sentEmailsStore.length = 0;
 }
 
+export function resetTransporterForTesting(): void {
+  cachedTransporter = null;
+}
+
 export function isEmailConfigured(): boolean {
   if (config.smtpHost && config.smtpPort) {
     return true;
@@ -59,7 +63,7 @@ function getTransporter(): Transporter | null {
 
     cachedTransporter = nodemailer.createTransport({
       host: config.smtpHost,
-      port: config.smtpPort,
+      port: Number(process.env.SMTP_PORT) || config.smtpPort,
       secure: config.smtpSecure || false,
       auth: authObj,
       tls: { rejectUnauthorized },
@@ -79,6 +83,7 @@ export async function verifyEmailTransport(): Promise<boolean> {
       return true;
     } catch (err) {
       console.error('[EMAIL ADAPTER] SMTP Transport verification failed:', err);
+      cachedTransporter = null;
       return false;
     }
   }

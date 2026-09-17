@@ -1,5 +1,5 @@
 -- ============================================================================
--- FASE 1: PRE-BOOTSTRAP DE ROLES Y GRUPOS DE SEGURIDAD CANÓNICOS (v0.3.29)
+-- FASE 1: PRE-BOOTSTRAP DE ROLES Y GRUPOS DE SEGURIDAD CANÓNICOS (v0.3.30)
 -- Ejecutar exclusivamente como SUPERUSUARIO ('postgres') antes de crear objetos
 -- ============================================================================
 
@@ -77,7 +77,8 @@ GRANT app_user TO politica_canon_app;
 GRANT email_worker TO politica_canon_email_worker;
 GRANT CONNECT ON DATABASE politica_canon TO politica_canon_app, politica_canon_email_worker;
 GRANT token_resolver TO app_owner WITH ADMIN OPTION;
-GRANT USAGE, CREATE ON SCHEMA public TO token_resolver, app_owner, app_user, politica_canon_app;
+GRANT USAGE, CREATE ON SCHEMA public TO token_resolver, app_owner;
+GRANT USAGE ON SCHEMA public TO app_user, politica_canon_app;
 
 -- Conceder app_owner a postgres para permitir SET ROLE app_owner en migraciones locales
 DO $$

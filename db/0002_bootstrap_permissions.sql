@@ -1,5 +1,5 @@
 -- ============================================================================
--- FASE 3: POST-BOOTSTRAP DE PROPIEDAD, PERMISOS MÍNIMOS Y RLS (v0.3.29)
+-- FASE 3: POST-BOOTSTRAP DE PROPIEDAD, PERMISOS MÍNIMOS Y RLS (v0.3.30)
 -- Ejecutar exclusivamente como SUPERUSUARIO ('postgres') tras aplicar DDLs
 -- ============================================================================
 
@@ -129,9 +129,9 @@ END $$;
 GRANT email_worker TO politica_canon_email_worker;
 GRANT CONNECT ON DATABASE politica_canon TO politica_canon_email_worker, email_worker;
 
--- C-01 / C-02: La aplicación web runtime solo requiere INSERT sobre email_outbox (el worker autónomo procesa)
+-- C-01 / C-02: La aplicación web runtime solo requiere INSERT y SELECT(id) sobre email_outbox para la cláusula RETURNING id
 REVOKE SELECT, UPDATE, DELETE ON public.email_outbox FROM app_user, politica_canon_app;
-GRANT INSERT ON public.email_outbox TO app_user, politica_canon_app;
+GRANT INSERT, SELECT (id) ON public.email_outbox TO app_user, politica_canon_app;
 
 -- Concesión acotada para token_resolver (BYPASSRLS)
 GRANT USAGE ON SCHEMA public TO token_resolver;

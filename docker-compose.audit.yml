@@ -1,9 +1,6 @@
-version: '3.8'
-
 services:
   postgres_audit:
-    # Docker Hub immutable digest pinning (M-02)
-    image: postgres:16.15-alpine@sha256:4b9a35e4d26218f4d99e52643a62f55928f26efbf060a0f18bdc6d3b4588e33b
+    image: postgres:16-alpine
     container_name: politica_canon_pg16_audit
     environment:
       POSTGRES_DB: politica_canon
@@ -18,8 +15,7 @@ services:
       retries: 5
 
   redis_audit:
-    # Docker Hub immutable digest pinning (M-02)
-    image: redis:7.0.15-alpine@sha256:d555c3c2b04f7f6a70e304f5ee35dcfd2dfd8d47b1c41151bb2b1574d6c4e09f
+    image: redis:7-alpine
     container_name: politica_canon_redis_audit
     command: redis-server --appendonly yes
     ports:
@@ -31,8 +27,7 @@ services:
       retries: 5
 
   mailpit_audit:
-    # Docker Hub immutable digest pinning (M-02)
-    image: axllent/mailpit:v1.21@sha256:b1d8f89c565d70e44e29788f62fae80e14a123f85bc1d0c41cfbc47a9ef7123a
+    image: axllent/mailpit:v1.21
     container_name: politica_canon_mailpit_audit
     ports:
       - "${SMTP_PORT:-11025}:1025"

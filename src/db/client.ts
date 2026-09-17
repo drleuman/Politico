@@ -144,7 +144,10 @@ export async function checkDatabaseHealth(): Promise<{ ok: boolean; error?: stri
 
 export async function closeDbPool(): Promise<void> {
   try {
-    await dbPool.end();
+    await Promise.all([
+      dbPool.end().catch(() => {}),
+      emailWorkerPool.end().catch(() => {}),
+    ]);
   } catch (err: any) {
     console.error('Error cerrando pool de base de datos:', err.message);
   }

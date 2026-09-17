@@ -90,6 +90,20 @@ async function runPostBootstrap() {
     await client.query(sqlContent);
     await client.query('COMMIT;');
     console.log('✅ [FASE 3 COMPLETADA] Propiedad de objetos, revocaciones de seguridad e imposición de RLS finalizadas exitosamente.');
+
+    // Aserciones de catálogo C-02 y C-03
+    const fnOwnerRes = await client.query(`
+      SELECT pg_catalog.pg_get_userbyid(p.proowner) AS owner_name
+      FROM pg_catalog.pg_proc p
+      JOIN pg_catalog.pg_namespace n ON p.pronamespace = n.oid
+      WHERE n.nspname = 'public' AND p.proname = 'revoke_all_user_sessions_sec';
+    `);
+    const fnOwner = fnOwnerRes.rows[0]?.owner_name;
+    if (fnOwner !== 'token_resolver') {
+      console.error(`❌ ERROR FATAL (C-03): revoke_all_user_sessions_sec pertenece a '${fnOwner}', se requiere 'token_resolver'.`);
+      process.exit(1);
+    }
+    console.log(`✅ Catálogo PG16: revoke_all_user_sessions_sec pertenece a '${fnOwner}' (BYPASSRLS).`);
   } catch (err) {
     await client.query('ROLLBACK;').catch(() => {});
     console.error('❌ ERROR DURANTE FASE 3 POST-BOOTSTRAP:', err.message);

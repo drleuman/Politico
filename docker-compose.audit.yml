@@ -2,7 +2,7 @@ version: '3.8'
 
 services:
   postgres_audit:
-    image: postgres:16-alpine
+    image: postgres:16.15-alpine
     container_name: politica_canon_pg16_audit
     environment:
       POSTGRES_DB: politica_canon
@@ -17,7 +17,7 @@ services:
       retries: 5
 
   redis_audit:
-    image: redis:7-alpine
+    image: redis:7.0.15-alpine
     container_name: politica_canon_redis_audit
     command: redis-server --appendonly yes
     ports:

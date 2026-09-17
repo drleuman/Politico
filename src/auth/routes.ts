@@ -147,7 +147,7 @@ export async function registerAuthRoutes(fastify: FastifyInstance) {
         status: 'created',
         invitationId: result.invitationId,
         expiresAt: result.expiresAt,
-        message: 'Invitación emitida y enviada por correo electrónico de forma segura.',
+        message: 'Invitación emitida y encolada para envío seguro.',
       });
     } catch (err: any) {
       await client.query('ROLLBACK').catch(() => {});

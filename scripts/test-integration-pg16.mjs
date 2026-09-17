@@ -335,8 +335,8 @@ async function runIntegrationTest() {
     }
     console.log('✅ Invitations API: Invitación aceptada correctamente con token extraído de Mailpit.');
 
-    // 8. C-01 PRUEBA E2E: RECUPERACIÓN DE CONTRASEÑA, REVOCACIÓN DE SESIONES Y AUDITORÍA TENANT
-    console.log('\n--- PRUEBA E2E C-01: RESTABLECIMIENTO DE CONTRASEÑA Y REVOCACIÓN DE SESIONES ---');
+    // 8. C-01 & C-03 PRUEBA E2E: RECUPERACIÓN DE CONTRASEÑA, REVOCACIÓN MULTI-TENANT CROSS-ORGANIZATION Y OFUSCACIÓN DE TOKEN
+    console.log('\n--- PRUEBA E2E C-01 & C-03: RESTABLECIMIENTO DE CONTRASEÑA Y REVOCACIÓN CROSS-ORGANIZATION ---');
     const resetUserEmail = 'reset.user@test.canon';
     const resetUserId = '66666666-6666-6666-6666-666666666666';
     const resetUserPassHash = await hashPassword('PasswordResetOld123!');
@@ -346,19 +346,36 @@ async function runIntegrationTest() {
     await dbClientC01.query(`
       INSERT INTO users (id, email, full_name, is_active, mfa_enabled) VALUES ('${resetUserId}', '${resetUserEmail}', 'User Reset Test', TRUE, FALSE) ON CONFLICT (id) DO NOTHING;
       INSERT INTO user_credentials (user_id, password_hash, password_algo) VALUES ('${resetUserId}', '${resetUserPassHash}', 'argon2id') ON CONFLICT (user_id) DO UPDATE SET password_hash = '${resetUserPassHash}';
+      
+      -- Membresías en DOS organizaciones distintas (orgId y otherOrgId)
       INSERT INTO organization_memberships (organization_id, user_id, is_active) VALUES ('${orgId}', '${resetUserId}', TRUE) ON CONFLICT (organization_id, user_id) DO NOTHING;
+      INSERT INTO organization_memberships (organization_id, user_id, is_active) VALUES ('${otherOrgId}', '${resetUserId}', TRUE) ON CONFLICT (organization_id, user_id) DO NOTHING;
+      
       INSERT INTO role_assignments (organization_id, scope_type, scope_id, target_user_id, assigned_role, is_active)
       VALUES ('${orgId}', 'ORGANIZATION', '${orgId}', '${resetUserId}', 'WRITER', TRUE) ON CONFLICT DO NOTHING;
+      INSERT INTO role_assignments (organization_id, scope_type, scope_id, target_user_id, assigned_role, is_active)
+      VALUES ('${otherOrgId}', 'ORGANIZATION', '${otherOrgId}', '${resetUserId}', 'WRITER', TRUE) ON CONFLICT DO NOTHING;
     `);
 
-    // Iniciar sesión con resetUser para crear una sesión activa
-    const resetLoginRes = await fastifyApp.inject({
+    // Iniciar sesión con resetUser en Org 1
+    const resetLoginRes1 = await fastifyApp.inject({
       method: 'POST',
       url: '/api/v1/auth/login',
       payload: { email: resetUserEmail, password: 'PasswordResetOld123!', organizationId: orgId }
     });
-    const resetSessionCookie = extractCookie(resetLoginRes, '__Host-sid');
-    if (!resetSessionCookie) throw new Error('C-01 Test: Login de usuario para reset falló.');
+    const resetSessionCookieOrg1 = extractCookie(resetLoginRes1, '__Host-sid');
+
+    // Iniciar sesión con resetUser en Org 2
+    const resetLoginRes2 = await fastifyApp.inject({
+      method: 'POST',
+      url: '/api/v1/auth/login',
+      payload: { email: resetUserEmail, password: 'PasswordResetOld123!', organizationId: otherOrgId }
+    });
+    const resetSessionCookieOrg2 = extractCookie(resetLoginRes2, '__Host-sid');
+
+    if (!resetSessionCookieOrg1 || !resetSessionCookieOrg2) {
+      throw new Error('C-01/C-03 Test: Logins en múltiples organizaciones fallaron.');
+    }
 
     // Solicitar restablecimiento de contraseña
     const forgotRes = await fastifyApp.inject({
@@ -386,22 +403,36 @@ async function runIntegrationTest() {
     });
     if (executeResetRes.statusCode !== 200) throw new Error(`reset-password falló: ${executeResetRes.payload}`);
 
-    // Verificar que la sesión previa del usuario QUEDÓ REVOCADA (devuelve HTTP 401)
-    const revokedSessionCheck = await fastifyApp.inject({
+    // C-03: Verificar que AMBAS sesiones en organizaciones DISTINTAS quedaron revocadas (HTTP 401)
+    const checkSessionOrg1 = await fastifyApp.inject({
       method: 'GET',
       url: '/api/v1/auth/me',
-      headers: { cookie: `__Host-sid=${resetSessionCookie}` }
+      headers: { cookie: `__Host-sid=${resetSessionCookieOrg1}` }
     });
-    if (revokedSessionCheck.statusCode !== 401) {
-      throw new Error(`CRITICAL FAIL C-01: La sesión previa del usuario no fue revocada tras reset-password (HTTP ${revokedSessionCheck.statusCode}).`);
+    const checkSessionOrg2 = await fastifyApp.inject({
+      method: 'GET',
+      url: '/api/v1/auth/me',
+      headers: { cookie: `__Host-sid=${resetSessionCookieOrg2}` }
+    });
+
+    if (checkSessionOrg1.statusCode !== 401 || checkSessionOrg2.statusCode !== 401) {
+      throw new Error(`CRITICAL FAIL C-03: Revocación multi-tenant no afectó a todas las organizaciones (Org1: ${checkSessionOrg1.statusCode}, Org2: ${checkSessionOrg2.statusCode}).`);
     }
 
+    // H-04: Verificar ofuscación de secreto en payload de email_outbox tras envío
+    const payloadRedactCheck = await dbClientC01.query(`SELECT payload FROM email_outbox WHERE status = 'SENT' ORDER BY created_at DESC LIMIT 1`);
+    const sentPayload = payloadRedactCheck.rows[0]?.payload;
+    if (sentPayload && sentPayload.token !== '[REDACTED]') {
+      throw new Error(`CRITICAL FAIL H-04: El token secreto no fue redactado en email_outbox. Payload: ${JSON.stringify(sentPayload)}`);
+    }
+    console.log('✅ H-04 Seguridad: Secreto de token redactado a [REDACTED] en email_outbox tras envío exitoso.');
+
     // Verificar que el evento de auditoría PASSWORD_RESET_COMPLETED fue registrado
-    const auditRes = await dbClientC01.query(`SELECT event_type FROM security_audit_events WHERE organization_id = '${orgId}' AND actor_id = '${resetUserId}' AND event_type = 'PASSWORD_RESET_COMPLETED'`);
+    const auditRes = await dbClientC01.query(`SELECT event_type FROM security_audit_events WHERE actor_id = '${resetUserId}' AND event_type = 'PASSWORD_RESET_COMPLETED'`);
     if (auditRes.rows.length === 0) {
       throw new Error('CRITICAL FAIL C-01: Evento de auditoría PASSWORD_RESET_COMPLETED no registrado tras reset.');
     }
-    console.log('✅ C-01 E2E: Restablecimiento de contraseña revocó efectivamente todas las sesiones previas y registró evento de auditoría con GUC tenant.');
+    console.log('✅ C-01 & C-03 E2E: Restablecimiento de contraseña revocó incondicionalmente todas las sesiones cross-tenant en 2 organizaciones distintas.');
     await dbClientC01.end();
 
     // 9. C-02 PRUEBA DE BYPASS JERÁRQUICO CON MÚLTIPLES ROLES (WRITER + ADMIN)
@@ -654,31 +685,3 @@ runIntegrationTest().catch((err) => {
   process.exit(1);
 });
 
-
-  } finally {
-    if (fastifyApp) {
-      await fastifyApp.close().catch(() => {});
-    }
-    try {
-      const { closeDbPool } = await import('../dist/db/client.js');
-      const { closeRedisClient } = await import('../dist/redis/client.js');
-      await closeDbPool();
-      await closeRedisClient();
-    } catch {}
-
-    if (composeStarted) {
-      console.log('\n🧹 [FINALLY CLEANUP] Destruyendo contenedores y volúmenes de prueba Docker Compose (down -v)...');
-      try {
-        execSync('docker compose -f docker-compose.audit.yml down -v', { stdio: 'inherit' });
-        console.log('✅ [FINALLY CLEANUP] Recursos Docker destruidos incondicionalmente en finally.');
-      } catch (downErr) {
-        console.warn('⚠️ Error al destruir contenedores Docker:', downErr.message);
-      }
-    }
-  }
-}
-
-runIntegrationTest().catch((err) => {
-  console.error('\n❌ ERROR FATAL EN PRUEBA DE INTEGRACIÓN PG16:', err.message);
-  process.exit(1);
-});

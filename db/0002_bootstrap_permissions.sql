@@ -40,7 +40,7 @@ BEGIN
         EXECUTE format('ALTER VIEW public.%I OWNER TO app_owner;', r.table_name);
     END LOOP;
     
-    -- Transferir funciones usando pg_proc e identidades exactas, exceptuando el despachador de auditoría y los resolvers
+    -- Transferir funciones usando pg_proc e identidades exactas, exceptuando el despachador de auditoría, resolvers y revocador de sesiones
     FOR r IN (
         SELECT p.proname, pg_catalog.pg_get_function_identity_arguments(p.oid) as args
         FROM pg_catalog.pg_proc p
@@ -50,7 +50,8 @@ BEGIN
             'get_pending_outbox_tenants',
             'resolve_session_by_token',
             'resolve_invitation_by_token',
-            'get_user_active_memberships'
+            'get_user_active_memberships',
+            'revoke_all_user_sessions_sec'
           )
     ) LOOP
         EXECUTE format('ALTER FUNCTION public.%I(%s) OWNER TO app_owner;', r.proname, r.args);
@@ -65,7 +66,7 @@ BEGIN
         ALTER FUNCTION public.get_pending_outbox_tenants() OWNER TO audit_dispatcher;
     END IF;
 
-    -- Asignación explícita de propiedad de las funciones de resolución a token_resolver (BYPASSRLS)
+    -- Asignación explícita de propiedad de las funciones de resolución y revocación a token_resolver (BYPASSRLS)
     FOR r IN (
         SELECT p.proname, pg_catalog.pg_get_function_identity_arguments(p.oid) as args
         FROM pg_catalog.pg_proc p
@@ -74,7 +75,8 @@ BEGIN
           AND p.proname IN (
             'resolve_session_by_token',
             'resolve_invitation_by_token',
-            'get_user_active_memberships'
+            'get_user_active_memberships',
+            'revoke_all_user_sessions_sec'
           )
     ) LOOP
         EXECUTE format('ALTER FUNCTION public.%I(%s) OWNER TO token_resolver;', r.proname, r.args);
@@ -108,9 +110,13 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON public.workspace_memberships TO app_user
 GRANT SELECT, INSERT, UPDATE, DELETE ON public.role_assignments TO app_user, politica_canon_app;
 GRANT SELECT, INSERT, UPDATE ON public.audit_outbox TO app_user, politica_canon_app;
 
--- Concesión acotada de solo lectura para token_resolver (BYPASSRLS)
+-- C-02: La aplicación runtime solo requiere INSERT sobre email_outbox (el worker procesa)
+GRANT INSERT ON public.email_outbox TO app_user, politica_canon_app;
+
+-- Concesión acotada para token_resolver (BYPASSRLS)
 GRANT USAGE ON SCHEMA public TO token_resolver;
-GRANT SELECT ON public.user_sessions, public.invitations, public.organization_memberships, public.users TO token_resolver;
+GRANT SELECT, UPDATE ON public.user_sessions TO token_resolver;
+GRANT SELECT ON public.invitations, public.organization_memberships, public.users TO token_resolver;
 
 -- Tablas de control y gobernanza: SOLO LECTURA (SELECT) para app_user y politica_canon_app
 GRANT SELECT ON public.organizations TO app_user, politica_canon_app;
@@ -137,9 +143,12 @@ REVOKE INSERT, UPDATE, DELETE ON public.organizations, public.workspaces, public
 
 REVOKE INSERT, UPDATE, DELETE ON public.organizations, public.workspaces, public.authority_bodies, public.authority_memberships, public.decisions, public.decision_votes, public.publications, public.publication_events, public.audit_events FROM politica_canon_app;
 
--- Concesiones para audit_worker y audit_reader
+-- Concesiones para audit_worker, audit_reader y email_worker (C-02)
 GRANT SELECT, INSERT, UPDATE ON public.audit_outbox TO audit_worker;
 GRANT SELECT, INSERT, UPDATE ON public.audit_events TO audit_worker;
+GRANT USAGE ON SCHEMA public TO email_worker;
+GRANT SELECT, INSERT, UPDATE ON public.email_outbox TO email_worker, app_owner;
+
 DO $$
 BEGIN
     IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'audit_outbox_dead_letter') THEN
@@ -176,6 +185,7 @@ REVOKE EXECUTE ON FUNCTION public.get_pending_outbox_tenants() FROM politica_can
 GRANT EXECUTE ON FUNCTION public.get_pending_outbox_tenants() TO audit_worker;
 
 GRANT EXECUTE ON FUNCTION public.get_user_active_memberships(UUID) TO app_user, politica_canon_app;
+GRANT EXECUTE ON FUNCTION public.revoke_all_user_sessions_sec(UUID) TO app_user, politica_canon_app;
 
 -- 5. Imposición estricta de Row Level Security (RLS) en todas las tablas tenant-scoped
 DO $$

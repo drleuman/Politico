@@ -56,6 +56,13 @@ BEGIN
     ELSE
         ALTER ROLE politica_canon_app WITH NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS NOREPLICATION CONNECTION LIMIT 10;
     END IF;
+
+    -- 8. Rol Grupo de Worker de Correo (email_worker)
+    IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'email_worker') THEN
+        CREATE ROLE email_worker WITH NOLOGIN NOINHERIT NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS NOREPLICATION;
+    ELSE
+        ALTER ROLE email_worker WITH NOLOGIN NOINHERIT NOSUPERUSER NOCREATEROLE NOBYPASSRLS NOREPLICATION;
+    END IF;
 END $$;
 
 -- Enlazar la identidad de runtime al rol canónico app_user y otorgar ADMIN OPTION temporal a app_owner para asignación DDL

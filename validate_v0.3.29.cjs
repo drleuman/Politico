@@ -162,6 +162,7 @@ async function runValidation() {
       }
     }
 
+    let isProductionModuleTested = false;
     if (fs.existsSync(distCryptoPath)) {
       process.env.SESSION_SECRET = '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef_session';
       process.env.MFA_MASTER_KEY = mfaMasterKeyDev;
@@ -174,6 +175,7 @@ async function runValidation() {
 
       const { decryptPayloadToken } = await import('./dist/email/crypto-payload.js');
       decryptedToken = decryptPayloadToken(legacyEncryptedString);
+      isProductionModuleTested = true;
     } else {
       // M-04: Ejecución nativa sin requerir dist/ previamente compilado ni node_modules
       function deriveKeyNative(sec) { return crypto.createHash('sha256').update(sec).digest(); }
@@ -197,8 +199,13 @@ async function runValidation() {
       throw new Error(`El descifrado legacy de payload 'enc:' falló. Se esperaba '${rawToken}', se obtuvo '${decryptedToken}'.`);
     }
 
-    console.log(`✅ CHECK 4: Pruebas Ejecutables de Descifrado de Payloads Legacy v0.3.25 enc: (H-01, M-04)
-   └─ Descifrado autónomo exitoso de payload legacy 'enc:' generado con MFA_MASTER_KEY cuando EMAIL_OUTBOX_ENCRYPTION_KEY es independiente.`);
+    if (isProductionModuleTested) {
+      console.log(`✅ CHECK 4B: Prueba de Implementación de Producción de Descifrado Legacy 'enc:' (dist/email/crypto-payload.js) (H-01, M-04)
+   └─ Descifrado exitoso ejecutando el módulo compilado de producción TypeScript en dist/.`);
+    } else {
+      console.log(`✅ CHECK 4A: Prueba de Compatibilidad Criptográfica de Referencia Pre-Instalación (Node.js Native Crypto) (H-01, M-04)
+   └─ Descifrado autónomo exitoso usando especificación criptográfica nativa de referencia antes de 'npm ci'.`);
+    }
     passCount++;
   } catch (err) {
     console.error(`❌ CHECK 4 FAIL: ${err.message}`);

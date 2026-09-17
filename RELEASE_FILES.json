@@ -28,7 +28,7 @@
                   "package-lock.json":  "28f98a47294b34a08f9db3dc95d96fec4eb287e009e4cb1a3d0a6ff9d147e4fe",
                   "public/index.html":  "0c17ca7e9654cd379659a0039ee8990d50d0c13731a55244e0b7de24d289af41",
                   "README.md":  "7334f628681c3caf42ff456a2aa0986bbef652dd8ab39cf1c8d108e9ccb38d6d",
-                  "REMEDIATION_MATRIX_v0.3.29.md":  "01c79ebd2f45a57817bd235e79e302090936c43e5502cb0118fb55f0b6615542",
+                  "REMEDIATION_MATRIX_v0.3.29.md":  "41f1251a58d51fcd87fddb66a7fbd9edcbd7adf4a7eafb0c935a482f7066f09b",
                   "scripts/bootstrap-post.mjs":  "538747346cbb4571b51be68999671fd4dc7156cdc0c412b2bd8759a18a3700e7",
                   "scripts/bootstrap-pre.mjs":  "a1dbe1b680c175b656c89c4f8211b359437d627db8b4f14ba6b019c04ae4d490",
                   "scripts/email-worker.mjs":  "b5e332f8c36783dd5cf3e340dcab6e358475f64147140841de4e32fe06dc016d",
@@ -52,7 +52,7 @@
                   "src/redis/client.ts":  "59cb6eb83d14b1b95dff5b560f3295bec4203227cea4ea9bd1cf884ea9c9a422",
                   "src/server.ts":  "79c5b374c92bd5610879168dcd6b32d51f45e3340839eafb379aac6d4fba5fed",
                   "tsconfig.json":  "e4e3c0b013cd3b6379af809283aec78e7910f5d6fa5a75e6a5c14826457f580d",
-                  "validate_v0.3.29.cjs":  "5ed1c3f3254c3dc5f8f1f1a24b40b0c9dda8b2b5439982e9cd824f214fcd628b",
-                  "VALIDATION_REPORT_v0.3.29.md":  "ba01aed3345e7d04bbbe355b597472796a2d4d75adb6f6c9a3c42e6e33a6d35b"
+                  "validate_v0.3.29.cjs":  "5dee62ac1942840973574ec777f073a1768ca85046fe361d1bac5274a543eed0",
+                  "VALIDATION_REPORT_v0.3.29.md":  "1dc33c26f04c144a6fe255656504f59f3939e0c9df03b2c87b5340f081a0188c"
               }
 }

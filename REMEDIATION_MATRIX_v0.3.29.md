@@ -2,9 +2,10 @@
 
 Fecha: 17 de septiembre de 2026  
 Artefacto: `politica-canon-v0.3.29.zip`  
-SHA-256: `6177da60eed5b3dcc4aa20d924e75266bb74868af8befe2acab34020022be289`  
-Tamaño: `139.512 bytes`  
-Estado: **PASS (AUDITORÍA TÉCNICA Y REMEDIACIÓN CERTIFICADA TOTAL)**
+SHA-256: `0813e7c0674c7a0ef0d8591459606e42b3958320b80e9d3506ed400bebf91d65`  
+Tamaño: `139.824 bytes`  
+Repositorio Git Canónico: `https://github.com/drleuman/Politico.git` (rama `release/v0.3.29-candidate`)  
+Estado: **PASS — CANDIDATO TÉCNICO ACEPTADO PARA REVISIÓN DE GOBERNANZA**
 
 ---
 
@@ -12,7 +13,7 @@ Estado: **PASS (AUDITORÍA TÉCNICA Y REMEDIACIÓN CERTIFICADA TOTAL)**
 
 | ID Hallazgo | Categoría | Descripción Breve | Remediación Implementada v0.3.29 | Estado |
 | :--- | :--- | :--- | :--- | :---: |
-| **M-04** | **Medio** | Integridad y autonomía en extracción limpia | Incorporado `RELEASE_FILES.json` con hashes SHA-256 de todos los archivos del release. `validate_v0.3.29.cjs` opera en ARTIFACT MODE y SOURCE TREE MODE sin depender del ZIP externo. CHECK 4 comprueba `node_modules` y usa verificación nativa si `npm ci` no ha sido ejecutado. | **PASS / CLOSED** |
+| **M-04** | **Medio** | Integridad y autonomía en extracción limpia | Incorporado `RELEASE_FILES.json` con hashes SHA-256 de 51 archivos. `validate_v0.3.29.cjs` opera en ARTIFACT MODE y SOURCE TREE MODE. CHECK 4A valida criptografía nativa de referencia pre-`npm ci` y CHECK 4B valida el módulo compilado TypeScript post-build. | **PASS / CLOSED** |
 | **H-05** | **Alto** | `email_worker` omitía `NOCREATEROLE` en `ALTER ROLE` | Corregido en [db/0000_bootstrap_roles.sql](file:///f:/politica-canon-v0.1.0/politica-canon-v0.1.0/db/0000_bootstrap_roles.sql) con `NOCREATEROLE`. Prueba de degradación y reconvergencia real en `test-integration-pg16.mjs` y verificaciones de catálogo en `bootstrap-post.mjs`. | **PASS / CLOSED** |
 | **C-01** | Crítico | `npm test` script corregido | [package.json](file:///f:/politica-canon-v0.1.0/politica-canon-v0.1.0/package.json) apunta a `validate_v0.3.29.cjs` y el validador verifica la existencia de todos los archivos referenciados. | **PASS** |
 | **C-02** | Crítico | Provisión systemd diferida pre-migración | `provision.sh` comprueba `information_schema.tables` y defiere `systemctl start` hasta aplicar las migraciones y bootstraps. | **PASS** |

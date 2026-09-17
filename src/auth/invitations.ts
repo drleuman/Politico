@@ -72,11 +72,11 @@ export async function createInvitation(
 /**
  * Lista las invitaciones activas de una organización
  */
-export async function listInvitations(client: PoolClient, organizationId: string): Promise<Invitation[]> {
+export async function listInvitations(client: PoolClient, organizationId: string): Promise<Omit<Invitation, 'tokenHash'>[]> {
   await client.query("SELECT set_config('app.current_organization_id', $1, false)", [organizationId]);
 
   const res = await client.query(
-    `SELECT id, organization_id, workspace_id, email, role, token_hash, invited_by, expires_at, consumed_at, created_at
+    `SELECT id, organization_id, workspace_id, email, role, invited_by, expires_at, consumed_at, created_at
      FROM invitations
      WHERE organization_id = $1 AND consumed_at IS NULL AND expires_at > NOW()
      ORDER BY created_at DESC`,
@@ -89,7 +89,6 @@ export async function listInvitations(client: PoolClient, organizationId: string
     workspaceId: r.workspace_id,
     email: r.email,
     role: r.role as UserRole,
-    tokenHash: r.token_hash,
     invitedBy: r.invited_by,
     expiresAt: r.expires_at,
     consumedAt: r.consumed_at,

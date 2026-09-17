@@ -227,6 +227,45 @@ export async function revokeAllUserSessions(client: PoolClient, userId: string):
 }
 
 /**
+ * Revoca una sesión específica de un usuario por su ID
+ */
+export async function revokeSpecificSession(client: PoolClient, userId: string, sessionId: string): Promise<boolean> {
+  const res = await client.query(
+    `UPDATE user_sessions SET revoked_at = NOW() WHERE id = $1 AND user_id = $2 AND revoked_at IS NULL`,
+    [sessionId, userId]
+  );
+  return (res.rowCount ?? 0) > 0;
+}
+
+/**
+ * Obtiene todas las sesiones activas de un usuario
+ */
+export async function getUserActiveSessions(client: PoolClient, userId: string): Promise<UserSession[]> {
+  const res = await client.query(
+    `SELECT id, organization_id, user_id, sid_hash, anti_csrf_token_hash, ip_address, user_agent, created_at, idle_expires_at, absolute_expires_at, revoked_at, mfa_verified_at
+     FROM user_sessions
+     WHERE user_id = $1 AND revoked_at IS NULL AND absolute_expires_at > NOW() AND idle_expires_at > NOW()
+     ORDER BY created_at DESC`,
+    [userId]
+  );
+
+  return res.rows.map(r => ({
+    id: r.id,
+    organizationId: r.organization_id,
+    userId: r.user_id,
+    sidHash: r.sid_hash,
+    antiCsrfTokenHash: r.anti_csrf_token_hash,
+    ipAddress: r.ip_address,
+    userAgent: r.user_agent,
+    createdAt: r.created_at,
+    idleExpiresAt: r.idle_expires_at,
+    absoluteExpiresAt: r.absolute_expires_at,
+    revokedAt: r.revoked_at,
+    mfaVerifiedAt: r.mfa_verified_at,
+  }));
+}
+
+/**
  * Actualiza la marca de tiempo de verificación MFA reciente en la sesión activa
  */
 export async function updateSessionMfaVerified(client: PoolClient, sessionId: string): Promise<void> {

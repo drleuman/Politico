@@ -1,7 +1,7 @@
 {
   "name": "politica-canon",
-  "version": "0.3.17",
-  "description": "Monolito Fastify, Identidad, Invitaciones Privadas, Usuarios, Sesiones y RBAC/ABAC — Política Canon v0.3.17 (Fase 1.1 Correctiva)",
+  "version": "0.3.19",
+  "description": "Monolito Fastify, Identidad, Invitaciones Privadas, Usuarios, Sesiones y RBAC/ABAC — Política Canon v0.3.19 (Fase 1.1 Funcional Remediada)",
   "type": "module",
   "main": "dist/server.js",
   "scripts": {
@@ -11,12 +11,13 @@
     "bootstrap:pre": "node scripts/bootstrap-pre.mjs",
     "migrate:prod": "node scripts/migrate-production.mjs",
     "bootstrap:post": "node scripts/bootstrap-post.mjs",
-    "test": "npm run build && node scripts/test-integration-pg16.mjs && node validate_v0.3.17.cjs"
+    "test": "npm run build && node scripts/test-integration-pg16.mjs && node validate_v0.3.19.cjs"
   },
   "devDependencies": {
     "@electric-sql/pglite": "^0.5.8",
     "@types/ioredis": "^4.28.10",
     "@types/node": "^20.11.0",
+    "@types/nodemailer": "^6.4.15",
     "@types/pg": "^8.23.1",
     "pg": "^8.23.0",
     "typescript": "^5.3.3"
@@ -27,6 +28,7 @@
     "argon2": "^0.45.1",
     "dotenv": "^17.4.2",
     "fastify": "^5.12.5",
-    "ioredis": "^6.0.0"
+    "ioredis": "^6.0.0",
+    "nodemailer": "^6.9.15"
   }
 }

@@ -125,15 +125,14 @@ export async function verifyMfaStepUp(
     return { verified: true, usedBackupCode: false };
   }
 
-  // Intentar verificación mediante código de respaldo
+  // Intentar verificación atómica mediante código de respaldo
   const codeHash = hashToken(code.trim().toUpperCase());
-  const backupRes = await client.query(
-    `SELECT id FROM mfa_backup_codes WHERE user_id = $1 AND code_hash = $2 AND used_at IS NULL`,
+  const updateRes = await client.query(
+    `UPDATE mfa_backup_codes SET used_at = NOW() WHERE user_id = $1 AND code_hash = $2 AND used_at IS NULL RETURNING id`,
     [userId, codeHash]
   );
 
-  if (backupRes.rows.length > 0) {
-    await client.query(`UPDATE mfa_backup_codes SET used_at = NOW() WHERE id = $1`, [backupRes.rows[0].id]);
+  if (updateRes.rows.length > 0) {
     await updateSessionMfaVerified(client, sessionId);
     await recordSecurityAuditEvent(client, {
       organizationId,

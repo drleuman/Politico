@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# Script de Provisión Inicial de Servidor — Política Canon v0.3.17
+# Script de Provisión Inicial de Servidor — Política Canon v0.3.19
 # Ejecutar en el servidor Ubuntu 24.04 / Plesk como root o con sudo
 
 set -euo pipefail
 
-echo "== [POLÍTICA CANON v0.3.17] Provisión Inicial de Servidor =="
+echo "== [POLÍTICA CANON v0.3.19] Provisión Inicial de Servidor =="
 
 # 1. Crear usuario del sistema sin shell interactiva y asociar pertenencia de grupo postgres (B-02)
 if ! id -u politica-canon >/dev/null 2>&1; then
@@ -28,8 +28,8 @@ mkdir -p /root/politica-canon/backups
 chown -R politica-canon:politica-canon /opt/politica-canon
 chmod 0750 /opt/politica-canon
 chmod 0750 /opt/politica-canon/app
-find /opt/politica-canon/app -type d -exec chmod 0750 {} +
-find /opt/politica-canon/app -type f -exec chmod 0640 {} +
+find /opt/politica-canon/app -type d -exec chmod 0750 {} + 2>/dev/null || true
+find /opt/politica-canon/app -type f -exec chmod 0640 {} + 2>/dev/null || true
 chmod 0750 /opt/politica-canon/.npm-cache
 chown -R politica-canon:politica-canon /var/log/politica-canon
 chmod 0750 /var/log/politica-canon
@@ -61,23 +61,61 @@ if [ -z "${DERIVED_DB_URL}" ]; then
     exit 1
 fi
 
-# 5. Recuperar o generar SESSION_SECRET (32+ bytes / 64+ hex)
-EXISTING_SECRET=""
+# 5. Recuperar o generar SESSION_SECRET y MFA_MASTER_KEY (32+ bytes / 64+ hex)
+EXISTING_SESSION_SECRET=""
+EXISTING_MFA_KEY=""
+EXISTING_SMTP_HOST=""
+EXISTING_SMTP_PORT=""
+EXISTING_SMTP_USER=""
+EXISTING_SMTP_PASS=""
+EXISTING_SMTP_FROM=""
+EXISTING_SMTP_SECURE=""
+
 if [ -f /etc/politica-canon/runtime.env ]; then
-    EXISTING_SECRET=$(grep -E '^SESSION_SECRET=' /etc/politica-canon/runtime.env | cut -d'=' -f2- || true)
+    EXISTING_SESSION_SECRET=$(grep -E '^SESSION_SECRET=' /etc/politica-canon/runtime.env | cut -d'=' -f2- || true)
+    EXISTING_MFA_KEY=$(grep -E '^MFA_MASTER_KEY=' /etc/politica-canon/runtime.env | cut -d'=' -f2- || true)
+    EXISTING_SMTP_HOST=$(grep -E '^SMTP_HOST=' /etc/politica-canon/runtime.env | cut -d'=' -f2- || true)
+    EXISTING_SMTP_PORT=$(grep -E '^SMTP_PORT=' /etc/politica-canon/runtime.env | cut -d'=' -f2- || true)
+    EXISTING_SMTP_USER=$(grep -E '^SMTP_USER=' /etc/politica-canon/runtime.env | cut -d'=' -f2- || true)
+    EXISTING_SMTP_PASS=$(grep -E '^SMTP_PASS=' /etc/politica-canon/runtime.env | cut -d'=' -f2- || true)
+    if [ -z "${EXISTING_SMTP_PASS}" ]; then
+        EXISTING_SMTP_PASS=$(grep -E '^SMTP_PASSWORD=' /etc/politica-canon/runtime.env | cut -d'=' -f2- || true)
+    fi
+    EXISTING_SMTP_FROM=$(grep -E '^SMTP_FROM=' /etc/politica-canon/runtime.env | cut -d'=' -f2- || true)
+    EXISTING_SMTP_SECURE=$(grep -E '^SMTP_SECURE=' /etc/politica-canon/runtime.env | cut -d'=' -f2- || true)
 fi
 
-if [ -n "${EXISTING_SECRET}" ] && [ "${#EXISTING_SECRET}" -ge 32 ]; then
-    SESSION_SECRET="${EXISTING_SECRET}"
+# Preservar de /root/politica-canon/runtime.env si no existían en /etc
+if [ -f /root/politica-canon/runtime.env ]; then
+    [ -z "${EXISTING_MFA_KEY}" ] && EXISTING_MFA_KEY=$(grep -E '^MFA_MASTER_KEY=' /root/politica-canon/runtime.env | cut -d'=' -f2- || true)
+    [ -z "${EXISTING_SMTP_HOST}" ] && EXISTING_SMTP_HOST=$(grep -E '^SMTP_HOST=' /root/politica-canon/runtime.env | cut -d'=' -f2- || true)
+    [ -z "${EXISTING_SMTP_PORT}" ] && EXISTING_SMTP_PORT=$(grep -E '^SMTP_PORT=' /root/politica-canon/runtime.env | cut -d'=' -f2- || true)
+    [ -z "${EXISTING_SMTP_USER}" ] && EXISTING_SMTP_USER=$(grep -E '^SMTP_USER=' /root/politica-canon/runtime.env | cut -d'=' -f2- || true)
+    [ -z "${EXISTING_SMTP_PASS}" ] && EXISTING_SMTP_PASS=$(grep -E '^SMTP_PASS=' /root/politica-canon/runtime.env | cut -d'=' -f2- || true)
+    [ -z "${EXISTING_SMTP_FROM}" ] && EXISTING_SMTP_FROM=$(grep -E '^SMTP_FROM=' /root/politica-canon/runtime.env | cut -d'=' -f2- || true)
+    [ -z "${EXISTING_SMTP_SECURE}" ] && EXISTING_SMTP_SECURE=$(grep -E '^SMTP_SECURE=' /root/politica-canon/runtime.env | cut -d'=' -f2- || true)
+fi
+
+if [ -n "${EXISTING_SESSION_SECRET}" ] && [ "${#EXISTING_SESSION_SECRET}" -ge 32 ]; then
+    SESSION_SECRET="${EXISTING_SESSION_SECRET}"
     echo "[+] Preservando SESSION_SECRET existente válido."
 else
     SESSION_SECRET=$(openssl rand -hex 32 || head -c 64 /dev/urandom | xxd -p | tr -d '\n')
     echo "[+] Generado nuevo SESSION_SECRET de 32 bytes (64 hex)."
 fi
 
-# 6. Escribir /etc/politica-canon/runtime.env con permisos strictly root:politica-canon 0640 (Sin imprimir secretos)
-cat <<EOF > /etc/politica-canon/runtime.env
-# Configuración de tiempo de ejecución Política Canon v0.3.11
+if [ -n "${EXISTING_MFA_KEY}" ] && [ "${#EXISTING_MFA_KEY}" -ge 32 ]; then
+    MFA_MASTER_KEY="${EXISTING_MFA_KEY}"
+    echo "[+] Preservando MFA_MASTER_KEY existente válida."
+else
+    MFA_MASTER_KEY=$(openssl rand -hex 32 || head -c 64 /dev/urandom | xxd -p | tr -d '\n')
+    echo "[+] Generada nueva MFA_MASTER_KEY de 32 bytes (64 hex)."
+fi
+
+# 6. Escribir /etc/politica-canon/runtime.env.tmp de forma atómica y segura
+TMP_ENV="/etc/politica-canon/runtime.env.tmp"
+cat <<EOF > "${TMP_ENV}"
+# Configuración de tiempo de ejecución Política Canon v0.3.19
 NODE_ENV=production
 PORT=3000
 HOST=127.0.0.1
@@ -85,11 +123,26 @@ APP_BASE_URL=https://peaceful-johnson.194-164-175-146.plesk.page
 REDIS_URL=redis://127.0.0.1:6379/0
 DATABASE_URL=${DERIVED_DB_URL}
 SESSION_SECRET=${SESSION_SECRET}
+MFA_MASTER_KEY=${MFA_MASTER_KEY}
+SMTP_HOST=${EXISTING_SMTP_HOST}
+SMTP_PORT=${EXISTING_SMTP_PORT:-587}
+SMTP_USER=${EXISTING_SMTP_USER}
+SMTP_PASS=${EXISTING_SMTP_PASS}
+SMTP_FROM=${EXISTING_SMTP_FROM}
+SMTP_SECURE=${EXISTING_SMTP_SECURE:-false}
 EOF
 
+# Validar contenido obligatorio antes de reemplazar
+if ! grep -q "^SESSION_SECRET=" "${TMP_ENV}" || ! grep -q "^MFA_MASTER_KEY=" "${TMP_ENV}" || ! grep -q "^DATABASE_URL=" "${TMP_ENV}"; then
+    echo "❌ ERROR FATAL: El archivo de entorno temporal no contiene las variables obligatorias. Abortando provisión."
+    rm -f "${TMP_ENV}"
+    exit 1
+fi
+
+mv "${TMP_ENV}" /etc/politica-canon/runtime.env
 chown root:politica-canon /etc/politica-canon/runtime.env
 chmod 0640 /etc/politica-canon/runtime.env
-echo "[+] Archivo /etc/politica-canon/runtime.env configurado con propietario root:politica-canon y modo 0640."
+echo "[+] Archivo /etc/politica-canon/runtime.env configurado de forma atómica con propietario root:politica-canon y modo 0640."
 
 # 7. Instalar unidad de servicio systemd
 if [ -f /opt/politica-canon/app/deploy/systemd/politica-canon.service ]; then
@@ -99,6 +152,6 @@ if [ -f /opt/politica-canon/app/deploy/systemd/politica-canon.service ]; then
     systemctl enable politica-canon
 fi
 
-echo "== [POLÍTICA CANON v0.3.11] Provisión completada exitosamente =="
+echo "== [POLÍTICA CANON v0.3.19] Provisión completada exitosamente =="
 
 

@@ -15,6 +15,8 @@ import {
   validateSession,
   revokeSession,
   revokeAllUserSessions,
+  getUserActiveSessions,
+  revokeSpecificSession,
 } from './session.js';
 import {
   createInvitation,
@@ -28,10 +30,12 @@ import {
   verifyMfaStepUp,
   disableMfa,
 } from './mfa.js';
+import { sendInvitationEmail, sendPasswordResetEmail } from '../email/adapter.js';
 import { buildResolvedAuthorizationContext } from './roles.js';
 import { recordSecurityAuditEvent } from '../audit/events.js';
 
-const MASTER_KEY = config.sessionSecret;
+const MASTER_KEY = config.mfaMasterKey;
+const DUMMY_HASH = '$argon2id$v=19$m=65536,t=3,p=4$ZHVtbXlzYWx0MTIzNDU2Nw$ZHVtbXloYXNoMTIzNDU2Nzg5MDEyMzQ1Njc4OTAxMjM';
 
 /**
  * Control de tasa (Rate Limiting) con Redis — FAIL CLOSED
@@ -54,11 +58,11 @@ async function checkRateLimit(key: string, maxAttempts: number, windowSeconds: n
 }
 
 /**
- * Extrae el token de sesión exclusivamente desde la cookie HttpOnly 'sid'
+ * Extrae el token de sesión desde la cookie HttpOnly '__Host-sid' o 'sid'
  */
 function extractSessionToken(request: FastifyRequest): string | null {
   const cookies = request.cookies || {};
-  return cookies.sid || null;
+  return cookies['__Host-sid'] || cookies.sid || null;
 }
 
 /**
@@ -82,7 +86,7 @@ export async function registerAuthRoutes(fastify: FastifyInstance) {
   // 1. ENDPOINTS DE INVITACIONES
   // --------------------------------------------------------------------------
 
-  // POST /api/v1/invitations — Crear invitación privada (Exige RBAC, MFA y Anti-CSRF)
+  // POST /api/v1/invitations — Crear invitación privada (Exige RBAC, MFA, SMTP real y Anti-CSRF)
   fastify.post('/api/v1/invitations', async (request: FastifyRequest, reply: FastifyReply) => {
     const token = extractSessionToken(request);
     const client = await pool.connect();
@@ -126,12 +130,20 @@ export async function registerAuthRoutes(fastify: FastifyInstance) {
         expiresInHours,
       });
 
+      // C-02: Entrega de invitación exclusivamente por correo mediante adaptador SMTP
+      try {
+        await sendInvitationEmail(email, result.rawToken, 'Política Canon');
+      } catch (emailErr: any) {
+        return reply.status(503).send({
+          error: 'EMAIL_SERVICE_UNAVAILABLE: El servicio de transporte de correo no está disponible o falló la entrega. La invitación no fue emitida.',
+        });
+      }
+
       return reply.status(201).send({
         status: 'created',
         invitationId: result.invitationId,
-        rawToken: result.rawToken,
         expiresAt: result.expiresAt,
-        invitationUrl: `${config.appBaseUrl}/accept-invitation?token=${result.rawToken}`,
+        message: 'Invitación emitida y enviada por correo electrónico de forma segura.',
       });
     } catch (err: any) {
       return reply.status(400).send({ error: err.message });
@@ -242,7 +254,7 @@ export async function registerAuthRoutes(fastify: FastifyInstance) {
   // 2. ENDPOINTS DE AUTENTICACIÓN Y SESIÓN
   // --------------------------------------------------------------------------
 
-  // POST /api/v1/auth/login — Inicio de sesión con credenciales Argon2id
+  // POST /api/v1/auth/login — Inicio de sesión uniforme (H-02 sin enumeración)
   fastify.post('/api/v1/auth/login', async (request: FastifyRequest, reply: FastifyReply) => {
     const ip = request.ip || '127.0.0.1';
     const userAgent = request.headers['user-agent'] || 'Unknown';
@@ -269,74 +281,70 @@ export async function registerAuthRoutes(fastify: FastifyInstance) {
         [email.trim().toLowerCase()]
       );
 
+      let isMatch = false;
+      let user: any = null;
+
       if (userRes.rows.length === 0) {
-        return reply.status(401).send({ error: 'INVALID_CREDENTIALS: Credenciales inválidas.' });
-      }
-
-      const user = userRes.rows[0];
-
-      if (!user.is_active) {
-        return reply.status(403).send({ error: 'USER_INACTIVE: La cuenta se encuentra desactivada.' });
-      }
-
-      if (user.locked_until && new Date(user.locked_until) > new Date()) {
-        return reply.status(403).send({ error: 'ACCOUNT_LOCKED: Cuenta bloqueada temporalmente por seguridad.' });
-      }
-
-      const isMatch = await verifyPassword(user.password_hash, password);
-      if (!isMatch) {
-        const attempts = (user.failed_login_attempts || 0) + 1;
-        let lockUntilSql = null;
-        if (attempts >= 5) {
-          lockUntilSql = new Date(Date.now() + 15 * 60 * 1000).toISOString();
+        await verifyPassword(DUMMY_HASH, password);
+      } else {
+        user = userRes.rows[0];
+        if (!user.is_active || (user.locked_until && new Date(user.locked_until) > new Date())) {
+          await verifyPassword(user.password_hash || DUMMY_HASH, password);
+        } else {
+          isMatch = await verifyPassword(user.password_hash, password);
         }
-        await client.query(
-          `UPDATE users SET failed_login_attempts = $1, locked_until = $2 WHERE id = $3`,
-          [attempts, lockUntilSql, user.id]
-        );
+      }
 
-        const orgForAudit = organizationId || (await client.query(`SELECT organization_id FROM organization_memberships WHERE user_id = $1 LIMIT 1`, [user.id])).rows[0]?.organization_id;
-        if (orgForAudit) {
-          await recordSecurityAuditEvent(client, {
-            organizationId: orgForAudit,
-            actorId: user.id,
-            eventType: 'LOGIN_FAILED',
-            payload: { ipAddress: ip },
-          });
+      if (!user || !user.is_active || (user.locked_until && new Date(user.locked_until) > new Date()) || !isMatch) {
+        if (user) {
+          const attempts = (user.failed_login_attempts || 0) + 1;
+          let lockUntilSql = null;
+          if (attempts >= 5) {
+            lockUntilSql = new Date(Date.now() + 15 * 60 * 1000).toISOString();
+          }
+          await client.query(
+            `UPDATE users SET failed_login_attempts = $1, locked_until = $2 WHERE id = $3`,
+            [attempts, lockUntilSql, user.id]
+          );
+
+          const orgForAudit = organizationId || (await client.query(`SELECT organization_id FROM organization_memberships WHERE user_id = $1 LIMIT 1`, [user.id])).rows[0]?.organization_id;
+          if (orgForAudit) {
+            await recordSecurityAuditEvent(client, {
+              organizationId: orgForAudit,
+              actorId: user.id,
+              eventType: 'LOGIN_FAILED',
+              payload: { ipAddress: ip },
+            });
+          }
         }
-
-        return reply.status(401).send({ error: 'INVALID_CREDENTIALS: Credenciales inválidas.' });
+        // H-02: Respuesta neutral uniforme para prevenir enumeración de usuarios
+        return reply.status(401).send({ error: 'INVALID_CREDENTIALS: Credenciales o cuenta inválidas.' });
       }
 
       // Reiniciar intentos fallidos
       await client.query(`UPDATE users SET failed_login_attempts = 0, locked_until = NULL WHERE id = $1`, [user.id]);
 
-      // Validar membresía activa y vigente en la organización solicitada
+      // Validar membresía activa y vigente en la organización solicitada usando función resolver SECURITY DEFINER (token_resolver BYPASSRLS)
       let targetOrgId = organizationId;
       if (targetOrgId) {
-        await client.query(`SELECT set_config('app.current_organization_id', $1, false);`, [targetOrgId]);
         const memRes = await client.query<{ organization_id: string }>(
-          `SELECT organization_id FROM organization_memberships 
-           WHERE user_id = $1 AND organization_id = $2 AND is_active = TRUE AND valid_from <= NOW() AND (valid_until IS NULL OR valid_until > NOW())`,
+          `SELECT organization_id FROM get_user_active_memberships($1) WHERE organization_id = $2`,
           [user.id, targetOrgId]
         );
         if (memRes.rows.length === 0) {
           return reply.status(403).send({ error: 'NO_ACTIVE_MEMBERSHIP: Membresía inactiva o no perteneciente a la organización especificada.' });
         }
       } else {
-        // Si no se especifica organización, buscar la primera membresía activa del usuario
-        // Usamos una consulta sin filtro GUC inicial o buscando la primera organización disponible
         const orgRes = await client.query<{ organization_id: string }>(
-          `SELECT organization_id FROM organization_memberships 
-           WHERE user_id = $1 AND is_active = TRUE AND valid_from <= NOW() AND (valid_until IS NULL OR valid_until > NOW()) LIMIT 1`,
+          `SELECT organization_id FROM get_user_active_memberships($1) LIMIT 1`,
           [user.id]
         );
         if (orgRes.rows.length === 0) {
           return reply.status(403).send({ error: 'NO_ACTIVE_ORGANIZATION: El usuario no posee membresía activa.' });
         }
         targetOrgId = orgRes.rows[0].organization_id;
-        await client.query(`SELECT set_config('app.current_organization_id', $1, false);`, [targetOrgId]);
       }
+      await client.query(`SELECT set_config('app.current_organization_id', $1, true);`, [targetOrgId]);
 
       // Crear sesión persistida
       const { session, rawToken, rawCsrfToken } = await createSession(client, {
@@ -354,7 +362,14 @@ export async function registerAuthRoutes(fastify: FastifyInstance) {
         payload: { sessionId: session.id, ipAddress: ip },
       });
 
-      // Cookie de sesión HttpOnly exclusivamente (SIN token en JSON)
+      // M-02: Cookie de sesión __Host-sid HttpOnly
+      reply.setCookie('__Host-sid', rawToken, {
+        path: '/',
+        httpOnly: true,
+        secure: config.nodeEnv === 'production',
+        sameSite: 'lax',
+      });
+
       reply.setCookie('sid', rawToken, {
         path: '/',
         httpOnly: true,
@@ -407,6 +422,7 @@ export async function registerAuthRoutes(fastify: FastifyInstance) {
         }
       }
 
+      reply.clearCookie('__Host-sid', { path: '/' });
       reply.clearCookie('sid', { path: '/' });
       return reply.status(200).send({ status: 'logged_out' });
     } finally {
@@ -436,6 +452,7 @@ export async function registerAuthRoutes(fastify: FastifyInstance) {
         payload: { revokedCount },
       });
 
+      reply.clearCookie('__Host-sid', { path: '/' });
       reply.clearCookie('sid', { path: '/' });
       return reply.status(200).send({ status: 'all_sessions_revoked', count: revokedCount });
     } finally {
@@ -443,7 +460,186 @@ export async function registerAuthRoutes(fastify: FastifyInstance) {
     }
   });
 
-  // POST /api/v1/auth/forgot-password — Solicitud de restablecimiento (SIN fuga de resetToken en JSON)
+  // GET /api/v1/sessions — Listar sesiones activas del usuario autenticado
+  fastify.get('/api/v1/sessions', async (request: FastifyRequest, reply: FastifyReply) => {
+    const token = extractSessionToken(request);
+    const client = await pool.connect();
+    try {
+      const { session, user } = await validateSession(client, token || '');
+      if (!session || !user) {
+        return reply.status(401).send({ error: 'UNAUTHENTICATED: Requiere sesión activa.' });
+      }
+
+      const activeSessions = await getUserActiveSessions(client, session.userId);
+      const sessionsList = activeSessions.map(s => ({
+        id: s.id,
+        ipAddress: s.ipAddress,
+        userAgent: s.userAgent,
+        createdAt: s.createdAt,
+        idleExpiresAt: s.idleExpiresAt,
+        mfaVerifiedAt: s.mfaVerifiedAt,
+        isCurrentSession: s.id === session.id,
+      }));
+
+      return reply.status(200).send({ sessions: sessionsList });
+    } finally {
+      client.release();
+    }
+  });
+
+  // DELETE /api/v1/sessions/:id — Revocar sesión individual o todas las demás
+  fastify.delete('/api/v1/sessions/:id', async (request: FastifyRequest, reply: FastifyReply) => {
+    const token = extractSessionToken(request);
+    const { id: targetSessionId } = request.params as any;
+    const client = await pool.connect();
+    try {
+      const { session, user } = await validateSession(client, token || '');
+      if (!session || !user) {
+        return reply.status(401).send({ error: 'UNAUTHENTICATED: Requiere sesión activa.' });
+      }
+
+      if (!verifyCsrfToken(request, session.antiCsrfTokenHash)) {
+        return reply.status(403).send({ error: 'CSRF_INVALID: Token Anti-CSRF no válido o ausente.' });
+      }
+
+      if (targetSessionId === 'all') {
+        const activeSessions = await getUserActiveSessions(client, session.userId);
+        let count = 0;
+        for (const s of activeSessions) {
+          if (s.id !== session.id) {
+            await revokeSpecificSession(client, session.userId, s.id);
+            count++;
+          }
+        }
+        await recordSecurityAuditEvent(client, {
+          organizationId: session.organizationId,
+          actorId: session.userId,
+          eventType: 'SESSION_REVOKED',
+          payload: { scope: 'other_sessions', revokedCount: count },
+        });
+        return reply.status(200).send({ status: 'other_sessions_revoked', count });
+      } else {
+        const revoked = await revokeSpecificSession(client, session.userId, targetSessionId);
+        if (!revoked) {
+          return reply.status(404).send({ error: 'SESSION_NOT_FOUND: Sesión no encontrada o ya revocada.' });
+        }
+        await recordSecurityAuditEvent(client, {
+          organizationId: session.organizationId,
+          actorId: session.userId,
+          eventType: 'SESSION_REVOKED',
+          payload: { sessionId: targetSessionId },
+        });
+        return reply.status(200).send({ status: 'session_revoked', id: targetSessionId });
+      }
+    } finally {
+      client.release();
+    }
+  });
+
+  // GET /api/v1/users — Listar usuarios de la organización autorizada
+  fastify.get('/api/v1/users', async (request: FastifyRequest, reply: FastifyReply) => {
+    const token = extractSessionToken(request);
+    const client = await pool.connect();
+    try {
+      const { session, user } = await validateSession(client, token || '');
+      if (!session || !user) {
+        return reply.status(401).send({ error: 'UNAUTHENTICATED: Requiere sesión activa.' });
+      }
+
+      const authContext = await buildResolvedAuthorizationContext(client, session.userId, session.organizationId, session.mfaVerifiedAt);
+      const isGovernanceUser = authContext.roles.includes('ADMIN') || authContext.roles.includes('COORDINATOR');
+      if (!isGovernanceUser) {
+        return reply.status(403).send({ error: 'FORBIDDEN: Requiere rol ADMIN o COORDINATOR para listar usuarios.' });
+      }
+
+      await client.query("SELECT set_config('app.current_organization_id', $1, true)", [session.organizationId]);
+      const res = await client.query(
+        `SELECT u.id, u.email, u.full_name as "fullName", u.is_active as "isActive", u.mfa_enabled as "mfaEnabled", om.joined_at as "joinedAt"
+         FROM users u
+         JOIN organization_memberships om ON om.user_id = u.id
+         WHERE om.organization_id = $1
+         ORDER BY om.joined_at DESC`,
+        [session.organizationId]
+      );
+
+      return reply.status(200).send({ users: res.rows });
+    } finally {
+      client.release();
+    }
+  });
+
+  // PATCH /api/v1/users/:id/status — Cambiar estado de usuario (C-03 Aislamiento Cross-Tenant)
+  fastify.patch('/api/v1/users/:id/status', async (request: FastifyRequest, reply: FastifyReply) => {
+    const token = extractSessionToken(request);
+    const { id: targetUserId } = request.params as any;
+    const body = request.body as any || {};
+    const { isActive } = body;
+
+    if (typeof isActive !== 'boolean') {
+      return reply.status(400).send({ error: 'MISSING_FIELDS: isActive (boolean) es requerido.' });
+    }
+
+    const client = await pool.connect();
+    try {
+      const { session, user } = await validateSession(client, token || '');
+      if (!session || !user) {
+        return reply.status(401).send({ error: 'UNAUTHENTICATED: Requiere sesión activa.' });
+      }
+
+      if (!verifyCsrfToken(request, session.antiCsrfTokenHash)) {
+        return reply.status(403).send({ error: 'CSRF_INVALID: Token Anti-CSRF no válido o ausente.' });
+      }
+
+      const authContext = await buildResolvedAuthorizationContext(client, session.userId, session.organizationId, session.mfaVerifiedAt);
+      const isGovernanceUser = authContext.roles.includes('ADMIN') || authContext.roles.includes('COORDINATOR');
+      if (!isGovernanceUser) {
+        return reply.status(403).send({ error: 'FORBIDDEN: Requiere rol ADMIN o COORDINATOR para modificar usuarios.' });
+      }
+
+      if (!user.mfaEnabled || authContext.mfaAgeSeconds === undefined || authContext.mfaAgeSeconds > 900) {
+        return reply.status(403).send({ error: 'MFA_REQUIRED: Requiere MFA habilitado y verificación reciente (<15 min) para modificar estado de usuarios.' });
+      }
+
+      // C-03: COMPROBACIÓN MANDATORIA DE PERTENENCIA AL TENANT
+      const targetCheck = await client.query(
+        `SELECT u.id FROM users u
+         JOIN organization_memberships om ON om.user_id = u.id
+         WHERE u.id = $1 AND om.organization_id = $2`,
+        [targetUserId, session.organizationId]
+      );
+
+      if (targetCheck.rows.length === 0) {
+        return reply.status(404).send({ error: 'USER_NOT_FOUND: El usuario especificado no pertenece a la organización autorizada.' });
+      }
+
+      await client.query('BEGIN');
+      await client.query("SELECT set_config('app.current_organization_id', $1, true)", [session.organizationId]);
+
+      await client.query(`UPDATE users SET is_active = $1 WHERE id = $2`, [isActive, targetUserId]);
+      await client.query(`UPDATE organization_memberships SET is_active = $1 WHERE user_id = $2 AND organization_id = $3`, [isActive, targetUserId, session.organizationId]);
+
+      if (!isActive) {
+        await revokeAllUserSessions(client, targetUserId);
+      }
+
+      await recordSecurityAuditEvent(client, {
+        organizationId: session.organizationId,
+        actorId: session.userId,
+        eventType: 'USER_STATUS_UPDATED',
+        payload: { targetUserId, isActive },
+      });
+
+      await client.query('COMMIT');
+      return reply.status(200).send({ status: 'updated', userId: targetUserId, isActive });
+    } catch (err: any) {
+      await client.query('ROLLBACK');
+      return reply.status(400).send({ error: err.message });
+    } finally {
+      client.release();
+    }
+  });
+
+  // POST /api/v1/auth/forgot-password — Solicitud de restablecimiento (H-03 envío real)
   fastify.post('/api/v1/auth/forgot-password', async (request: FastifyRequest, reply: FastifyReply) => {
     const ip = request.ip || '127.0.0.1';
     const body = request.body as any || {};
@@ -465,12 +661,18 @@ export async function registerAuthRoutes(fastify: FastifyInstance) {
         const userId = userRes.rows[0].id;
         const rawToken = generateHighEntropyToken(32);
         const tokenHash = hashToken(rawToken);
-        const expiresAt = new Date(Date.now() + 60 * 60 * 1000).toISOString();
+        const expiresAt = new Date(Date.now() + 15 * 60 * 1000).toISOString();
 
         await client.query(
           `INSERT INTO password_reset_tokens (user_id, token_hash, expires_at) VALUES ($1, $2, $3)`,
           [userId, tokenHash, expiresAt]
         );
+
+        try {
+          await sendPasswordResetEmail(email.trim().toLowerCase(), rawToken);
+        } catch (emailErr: any) {
+          console.error('[AUTH] Failed to send password reset email:', emailErr);
+        }
 
         const orgRes = await client.query(`SELECT organization_id FROM organization_memberships WHERE user_id = $1 LIMIT 1`, [userId]);
         if (orgRes.rows.length > 0) {
@@ -483,10 +685,9 @@ export async function registerAuthRoutes(fastify: FastifyInstance) {
         }
       }
 
-      // Respuesta genérica segura (SIN resetToken en JSON)
       return reply.status(200).send({
         status: 'reset_requested',
-        message: 'Si la cuenta existe, se enviará el enlace de recuperación.',
+        message: 'Si la cuenta existe y está activa, se enviará el enlace de recuperación por correo.',
       });
     } finally {
       client.release();
@@ -595,9 +796,16 @@ export async function registerAuthRoutes(fastify: FastifyInstance) {
   // 3. ENDPOINTS TOTP MFA
   // --------------------------------------------------------------------------
 
-  // POST /api/v1/auth/mfa/setup — Configuración inicial TOTP
+  // POST /api/v1/auth/mfa/setup — Configuración inicial TOTP (H-01 re-setup securizado y rate limit)
   fastify.post('/api/v1/auth/mfa/setup', async (request: FastifyRequest, reply: FastifyReply) => {
+    const ip = request.ip || '127.0.0.1';
     const token = extractSessionToken(request);
+
+    const rateOk = await checkRateLimit(`rate:mfa:setup:${ip}`, 5, 900);
+    if (!rateOk) {
+      return reply.status(530).send({ error: 'RATE_LIMIT_UNAVAILABLE_OR_EXCEEDED: Control de tasa no disponible o límite excedido.' });
+    }
+
     const client = await pool.connect();
     try {
       const { session, user } = await validateSession(client, token || '');
@@ -607,6 +815,18 @@ export async function registerAuthRoutes(fastify: FastifyInstance) {
 
       if (!verifyCsrfToken(request, session.antiCsrfTokenHash)) {
         return reply.status(403).send({ error: 'CSRF_INVALID: Token Anti-CSRF no válido o ausente.' });
+      }
+
+      if (user.mfaEnabled) {
+        const body = request.body as any || {};
+        const { password } = body;
+        if (!password) {
+          return reply.status(403).send({ error: 'MFA_RESETUP_REQUIRES_PASSWORD: Debe proporcionar su contraseña para reconfigurar MFA.' });
+        }
+        const credRes = await client.query(`SELECT password_hash FROM user_credentials WHERE user_id = $1`, [user.id]);
+        if (credRes.rows.length === 0 || !(await verifyPassword(credRes.rows[0].password_hash, password))) {
+          return reply.status(401).send({ error: 'PASSWORD_INCORRECT: Contraseña incorrecta para reconfigurar MFA.' });
+        }
       }
 
       const setupResult = await setupMfa(client, {
@@ -624,12 +844,18 @@ export async function registerAuthRoutes(fastify: FastifyInstance) {
 
   // POST /api/v1/auth/mfa/confirm — Confirmar enrolamiento con primer código TOTP
   fastify.post('/api/v1/auth/mfa/confirm', async (request: FastifyRequest, reply: FastifyReply) => {
+    const ip = request.ip || '127.0.0.1';
     const token = extractSessionToken(request);
     const body = request.body as any || {};
     const { code } = body;
 
     if (!code) {
       return reply.status(400).send({ error: 'MISSING_CODE: El código TOTP es obligatorio.' });
+    }
+
+    const rateOk = await checkRateLimit(`rate:mfa:confirm:${ip}`, 5, 900);
+    if (!rateOk) {
+      return reply.status(530).send({ error: 'RATE_LIMIT_UNAVAILABLE_OR_EXCEEDED: Control de tasa no disponible o límite excedido.' });
     }
 
     const client = await pool.connect();
@@ -661,12 +887,18 @@ export async function registerAuthRoutes(fastify: FastifyInstance) {
 
   // POST /api/v1/auth/mfa/verify — Verificación Step-up para refrescar mfa_verified_at
   fastify.post('/api/v1/auth/mfa/verify', async (request: FastifyRequest, reply: FastifyReply) => {
+    const ip = request.ip || '127.0.0.1';
     const token = extractSessionToken(request);
     const body = request.body as any || {};
     const { code } = body;
 
     if (!code) {
       return reply.status(400).send({ error: 'MISSING_CODE: El código TOTP o de respaldo es obligatorio.' });
+    }
+
+    const rateOk = await checkRateLimit(`rate:mfa:verify:${ip}`, 5, 900);
+    if (!rateOk) {
+      return reply.status(530).send({ error: 'RATE_LIMIT_UNAVAILABLE_OR_EXCEEDED: Control de tasa no disponible o límite excedido.' });
     }
 
     const client = await pool.connect();
@@ -698,12 +930,18 @@ export async function registerAuthRoutes(fastify: FastifyInstance) {
 
   // POST /api/v1/auth/mfa/disable — Desactivar TOTP MFA
   fastify.post('/api/v1/auth/mfa/disable', async (request: FastifyRequest, reply: FastifyReply) => {
+    const ip = request.ip || '127.0.0.1';
     const token = extractSessionToken(request);
     const body = request.body as any || {};
     const { password, code } = body;
 
     if (!password || !code) {
       return reply.status(400).send({ error: 'MISSING_FIELDS: password y code son obligatorios.' });
+    }
+
+    const rateOk = await checkRateLimit(`rate:mfa:disable:${ip}`, 5, 900);
+    if (!rateOk) {
+      return reply.status(530).send({ error: 'RATE_LIMIT_UNAVAILABLE_OR_EXCEEDED: Control de tasa no disponible o límite excedido.' });
     }
 
     const client = await pool.connect();

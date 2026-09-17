@@ -59,9 +59,14 @@ function validateConfig(): AppConfig {
     process.exit(1);
   }
 
-  const effectiveMfaMasterKey = process.env.MFA_MASTER_KEY || sessionSecret!;
-  if (effectiveMfaMasterKey.length < 32) {
+  const effectiveMfaMasterKey = process.env.MFA_MASTER_KEY || (nodeEnv === 'test' ? '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef_mfa' : '');
+  if (!effectiveMfaMasterKey || effectiveMfaMasterKey.length < 32) {
     console.error('[FATAL] Configuration validation failed closed. MFA_MASTER_KEY must be at least 32 characters in length.');
+    process.exit(1);
+  }
+
+  if (sessionSecret && effectiveMfaMasterKey && sessionSecret === effectiveMfaMasterKey && nodeEnv !== 'test') {
+    console.error('[FATAL] Configuration validation failed closed. MFA_MASTER_KEY must be cryptographically independent and cannot equal SESSION_SECRET.');
     process.exit(1);
   }
 

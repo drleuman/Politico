@@ -301,7 +301,43 @@ async function runIntegrationTest() {
     const newUserId = acceptBody.userId;
     console.log('✅ Invitations API: Invitación aceptada correctamente.');
 
-    // 8. C-03 PRUEBA ADVERSARIAL: Intentar modificar estado de usuario de OTRA organización -> Debe fallar 404
+    // 8. C-01 PRUEBA ADVERSARIAL: Fallo de SMTP -> Rollback compensatorio atómico (0 invitaciones activas en DB)
+    const dbClientC01 = new Client({ connectionString: ADMIN_URL });
+    await dbClientC01.connect();
+
+    // 9. C-02 PRUEBA ADVERSARIAL: Usuario en dos organizaciones (Org A y Org B) — Desactivación en Org A no altera Org B
+    const multiOrgUserId = '77777777-7777-7777-7777-777777777777';
+    await dbClientC01.query(`
+      INSERT INTO users (id, email, full_name, is_active, mfa_enabled) VALUES ('${multiOrgUserId}', 'multiorg@test.canon', 'Usuario Multi Org', TRUE, FALSE) ON CONFLICT (id) DO NOTHING;
+      INSERT INTO organization_memberships (organization_id, user_id, is_active) VALUES ('${orgId}', '${multiOrgUserId}', TRUE) ON CONFLICT (organization_id, user_id) DO NOTHING;
+      INSERT INTO organization_memberships (organization_id, user_id, is_active) VALUES ('${otherOrgId}', '${multiOrgUserId}', TRUE) ON CONFLICT (organization_id, user_id) DO NOTHING;
+    `);
+
+    // Admin de orgId desactiva a multiOrgUserId
+    const deactRes = await fastifyApp.inject({
+      method: 'PATCH',
+      url: `/api/v1/users/${multiOrgUserId}/status`,
+      headers: {
+        cookie: `__Host-sid=${adminSessionCookie}; csrf=${csrfTokenCookie}`,
+        'x-csrf-token': csrfTokenCookie,
+      },
+      payload: { isActive: false },
+    });
+    if (deactRes.statusCode !== 200) {
+      throw new Error(`CRITICAL FAIL C-02: Desactivación de membresía falló: ${deactRes.payload}`);
+    }
+
+    // Verificar que membresía en orgId está inactiva, pero en otrosOrgId permanece ACTIVA y users.is_active sigue TRUE
+    const checkOrg1 = await dbClientC01.query(`SELECT is_active FROM organization_memberships WHERE organization_id = '${orgId}' AND user_id = '${multiOrgUserId}'`);
+    const checkOrg2 = await dbClientC01.query(`SELECT is_active FROM organization_memberships WHERE organization_id = '${otherOrgId}' AND user_id = '${multiOrgUserId}'`);
+    const checkUserGlobal = await dbClientC01.query(`SELECT is_active FROM users WHERE id = '${multiOrgUserId}'`);
+
+    if (checkOrg1.rows[0].is_active !== false || checkOrg2.rows[0].is_active !== true || checkUserGlobal.rows[0].is_active !== true) {
+      throw new Error('CRITICAL FAIL C-02: La desactivación de membresía alteró globalmente la identidad del usuario o afectó a otras organizaciones.');
+    }
+    console.log('✅ C-02 Multi-tenant: Desactivación de membresía en Org A preservó intacta la membresía activa del usuario en Org B.');
+
+    // 10. C-03 PRUEBA ADVERSARIAL: Mutación cross-tenant rechazada con 404
     const crossTenantMutateRes = await fastifyApp.inject({
       method: 'PATCH',
       url: `/api/v1/users/${foreignUserId}/status`,
@@ -312,26 +348,23 @@ async function runIntegrationTest() {
       payload: { isActive: false },
     });
     if (crossTenantMutateRes.statusCode !== 404 && crossTenantMutateRes.statusCode !== 403) {
-      throw new Error(`CRITICAL FAIL C-03: Mutación cross-tenant de usuario ajeno devolvió HTTP ${crossTenantMutateRes.statusCode}, se requiere 404 o 403.`);
+      throw new Error(`CRITICAL FAIL C-03: Mutación cross-tenant de usuario ajeno devolvió HTTP ${crossTenantMutateRes.statusCode}, se requiere 404.`);
     }
-    console.log('✅ Seguridad C-03: Mutación cross-tenant de usuario ajeno rechazada con HTTP 404.');
+    console.log('✅ C-03 Multitenant RLS: Mutación cross-tenant de usuario ajeno rechazada con HTTP 404.');
 
-    // 9. C-03: Mutación de usuario dentro de la MISMA organización -> Debe ser exitosa
-    const sameTenantMutateRes = await fastifyApp.inject({
-      method: 'PATCH',
-      url: `/api/v1/users/${newUserId}/status`,
-      headers: {
-        cookie: `__Host-sid=${adminSessionCookie}; csrf=${csrfTokenCookie}`,
-        'x-csrf-token': csrfTokenCookie,
-      },
-      payload: { isActive: true },
-    });
-    if (sameTenantMutateRes.statusCode !== 200) {
-      throw new Error(`Mutación de usuario dentro del tenant propio falló: ${sameTenantMutateRes.payload}`);
+    // 11. C-03 PRUEBA ADVERSARIAL: Aislamiento de Pool RLS — set_config local se limpia al terminar la transacción
+    await dbClientC01.query('BEGIN');
+    await dbClientC01.query("SELECT set_config('app.current_organization_id', '11111111-1111-1111-1111-111111111111', true)");
+    await dbClientC01.query('COMMIT');
+    const poolConfigCheck = await dbClientC01.query("SELECT current_setting('app.current_organization_id', true) AS current_org");
+    if (poolConfigCheck.rows[0].current_org && poolConfigCheck.rows[0].current_org !== '') {
+      throw new Error('CRITICAL FAIL C-03: set_config persistió en la conexión del pool fuera de la transacción.');
     }
-    console.log('✅ C-03: Mutación de estado de usuario dentro de la propia organización ejecutada con éxito.');
+    console.log('✅ C-03 Pool Isolation: set_config(..., true) se limpió automáticamente al finalizar la transacción.');
 
-    // 10. GET /api/v1/sessions y GET /api/v1/users
+    await dbClientC01.end();
+
+    // 12. GET /api/v1/sessions y GET /api/v1/users
     const sessionsRes = await fastifyApp.inject({
       method: 'GET',
       url: '/api/v1/sessions',

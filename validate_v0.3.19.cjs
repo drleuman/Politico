@@ -141,8 +141,14 @@ async function runStaticValidation() {
 
   let hashFailures = 0;
   let verifiedCount = 0;
+  const isRepoMode = fs.existsSync('REMEDIATION_MATRIX.md');
+
   for (const [filePath, expectedHash] of Object.entries(historicalHashes)) {
     if (!fs.existsSync(filePath)) {
+      if (isRepoMode) {
+        hashFailures++;
+        console.log(`  -> Archivo histórico faltante en repositorio: ${filePath}`);
+      }
       continue;
     }
     const rawContent = fs.readFileSync(filePath, 'utf8');
@@ -155,10 +161,20 @@ async function runStaticValidation() {
       verifiedCount++;
     }
   }
+
+  let historicalPass = hashFailures === 0;
+  if (!isRepoMode) {
+    const hasManifest = fs.existsSync('MANIFEST_v0.3.19.json') || fs.existsSync('../MANIFEST_v0.3.19.json');
+    if (!hasManifest) {
+      historicalPass = false;
+      console.log('  -> Fallo H-03: Paquete ZIP no contiene informes históricos ni manifiesto externalizado MANIFEST_v0.3.19.json');
+    }
+  }
+
   assertCheck(
-    `Preservación Criptográfica Inmutable de Informes Históricos (${verifiedCount} verificados)`,
-    hashFailures === 0,
-    `${hashFailures} alteración(es) detectada(s)`
+    `Preservación Criptográfica Inmutable de Informes Históricos (${verifiedCount} verificados, modo ${isRepoMode ? 'repositorio' : 'paquete'})`,
+    historicalPass,
+    `${hashFailures} alteración(es) o ausencia no autorizada`
   );
 
   // 3. Compilación TypeScript Estricta

@@ -7,6 +7,7 @@ import { config } from './config/env.js';
 import { checkDatabaseHealth, closeDbPool } from './db/client.js';
 import { checkRedisHealth, closeRedisClient } from './redis/client.js';
 import { registerAuthRoutes } from './auth/routes.js';
+import { verifyEmailTransport, isEmailConfigured } from './email/adapter.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -44,20 +45,22 @@ export function buildServer() {
     });
   });
 
-  // GET /readyz — Readiness Probe (Verifies PostgreSQL 16+ & Redis 7 connections)
+  // GET /readyz — Readiness Probe (Verifies PostgreSQL 16+, Redis 7 & SMTP connections)
   server.get('/readyz', async (request, reply) => {
-    const [dbResult, redisResult] = await Promise.all([
+    const [dbResult, redisResult, smtpOk] = await Promise.all([
       checkDatabaseHealth(),
       checkRedisHealth(),
+      verifyEmailTransport(),
     ]);
 
-    const isReady = dbResult.ok && redisResult.ok;
+    const isReady = dbResult.ok && redisResult.ok && smtpOk;
     const statusCode = isReady ? 200 : 503;
 
     return reply.status(statusCode).send({
       status: isReady ? 'ready' : 'unhealthy',
       database: dbResult.ok ? 'connected' : 'disconnected',
       redis: redisResult.ok ? 'connected' : 'disconnected',
+      smtp: smtpOk ? 'connected' : (isEmailConfigured() ? 'failed' : 'not_configured'),
       timestamp: new Date().toISOString(),
     });
   });

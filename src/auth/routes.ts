@@ -130,10 +130,11 @@ export async function registerAuthRoutes(fastify: FastifyInstance) {
         expiresInHours,
       });
 
-      // C-02: Entrega de invitación exclusivamente por correo mediante adaptador SMTP
+      // C-01: Entrega atómica de invitación — Rollback compensatorio en DB si falla la entrega por correo
       try {
         await sendInvitationEmail(email, result.rawToken, 'Política Canon');
       } catch (emailErr: any) {
+        await client.query(`DELETE FROM invitations WHERE id = $1`, [result.invitationId]);
         return reply.status(503).send({
           error: 'EMAIL_SERVICE_UNAVAILABLE: El servicio de transporte de correo no está disponible o falló la entrega. La invitación no fue emitida.',
         });
@@ -362,15 +363,8 @@ export async function registerAuthRoutes(fastify: FastifyInstance) {
         payload: { sessionId: session.id, ipAddress: ip },
       });
 
-      // M-02: Cookie de sesión __Host-sid HttpOnly
+      // M-02: Cookie de sesión __Host-sid HttpOnly (Retirada completa de cookie heredada sid)
       reply.setCookie('__Host-sid', rawToken, {
-        path: '/',
-        httpOnly: true,
-        secure: config.nodeEnv === 'production',
-        sameSite: 'lax',
-      });
-
-      reply.setCookie('sid', rawToken, {
         path: '/',
         httpOnly: true,
         secure: config.nodeEnv === 'production',
@@ -600,11 +594,10 @@ export async function registerAuthRoutes(fastify: FastifyInstance) {
         return reply.status(403).send({ error: 'MFA_REQUIRED: Requiere MFA habilitado y verificación reciente (<15 min) para modificar estado de usuarios.' });
       }
 
-      // C-03: COMPROBACIÓN MANDATORIA DE PERTENENCIA AL TENANT
+      // C-02 & HIERARCHY: Comprobación mandatoria de pertenencia, jerarquía y ámbito tenant
       const targetCheck = await client.query(
-        `SELECT u.id FROM users u
-         JOIN organization_memberships om ON om.user_id = u.id
-         WHERE u.id = $1 AND om.organization_id = $2`,
+        `SELECT om.is_active, om.role FROM organization_memberships om
+         WHERE om.user_id = $1 AND om.organization_id = $2`,
         [targetUserId, session.organizationId]
       );
 
@@ -612,14 +605,30 @@ export async function registerAuthRoutes(fastify: FastifyInstance) {
         return reply.status(404).send({ error: 'USER_NOT_FOUND: El usuario especificado no pertenece a la organización autorizada.' });
       }
 
+      if (targetUserId === session.userId && !isActive) {
+        return reply.status(403).send({ error: 'SELF_DEACTIVATION_FORBIDDEN: No puede desactivar su propia membresía.' });
+      }
+
+      const targetRole = targetCheck.rows[0].role;
+      const actorIsAdmin = authContext.roles.includes('ADMIN');
+      if (!actorIsAdmin && targetRole === 'ADMIN') {
+        return reply.status(403).send({ error: 'HIERARCHY_VIOLATION: Un COORDINATOR no puede modificar la membresía de un ADMIN.' });
+      }
+
       await client.query('BEGIN');
       await client.query("SELECT set_config('app.current_organization_id', $1, true)", [session.organizationId]);
 
-      await client.query(`UPDATE users SET is_active = $1 WHERE id = $2`, [isActive, targetUserId]);
-      await client.query(`UPDATE organization_memberships SET is_active = $1 WHERE user_id = $2 AND organization_id = $3`, [isActive, targetUserId, session.organizationId]);
+      // C-02: Modificar únicamente la membresía del tenant sin alterar el estado global de identidad
+      await client.query(
+        `UPDATE organization_memberships SET is_active = $1, updated_at = NOW() WHERE user_id = $2 AND organization_id = $3`,
+        [isActive, targetUserId, session.organizationId]
+      );
 
       if (!isActive) {
-        await revokeAllUserSessions(client, targetUserId);
+        await client.query(
+          `UPDATE user_sessions SET revoked_at = NOW() WHERE user_id = $1 AND organization_id = $2 AND revoked_at IS NULL`,
+          [targetUserId, session.organizationId]
+        );
       }
 
       await recordSecurityAuditEvent(client, {
@@ -672,6 +681,7 @@ export async function registerAuthRoutes(fastify: FastifyInstance) {
           await sendPasswordResetEmail(email.trim().toLowerCase(), rawToken);
         } catch (emailErr: any) {
           console.error('[AUTH] Failed to send password reset email:', emailErr);
+          await client.query(`DELETE FROM password_reset_tokens WHERE token_hash = $1`, [tokenHash]);
         }
 
         const orgRes = await client.query(`SELECT organization_id FROM organization_memberships WHERE user_id = $1 LIMIT 1`, [userId]);

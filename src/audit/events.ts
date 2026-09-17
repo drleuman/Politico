@@ -50,8 +50,8 @@ export async function recordSecurityAuditEvent(
   }
   sanitize(sanitizedPayload);
 
-  // Configurar variable de sesión app.current_organization_id para satisfacer la política RLS (is_local = false para que persista en el cliente)
-  await client.query("SELECT set_config('app.current_organization_id', $1, false)", [organizationId]);
+  // Configurar variable de sesión app.current_organization_id para satisfacer la política RLS (is_local = true para ámbito local de transacción)
+  await client.query("SELECT set_config('app.current_organization_id', $1, true)", [organizationId]);
 
   const res = await client.query(
     `INSERT INTO audit_outbox (organization_id, actor_id, event_type, payload, status)

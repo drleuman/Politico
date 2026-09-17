@@ -73,7 +73,7 @@ export async function createSession(
   const absoluteExpiresAt = new Date(now.getTime() + ABSOLUTE_TIMEOUT_HOURS * 60 * 60 * 1000);
   const mfaVerifiedAt = mfaVerified ? now.toISOString() : null;
 
-  await client.query("SELECT set_config('app.current_organization_id', $1, false)", [organizationId]);
+  await client.query("SELECT set_config('app.current_organization_id', $1, true)", [organizationId]);
 
   const res = await client.query(
     `INSERT INTO user_sessions (
@@ -136,7 +136,7 @@ export async function validateSession(
   const row = res.rows[0];
 
   // Configurar la variable de sesión RLS app.current_organization_id para las operaciones subsecuentes
-  await client.query("SELECT set_config('app.current_organization_id', $1, false)", [row.organization_id]);
+  await client.query("SELECT set_config('app.current_organization_id', $1, true)", [row.organization_id]);
 
   // Comprobar bloqueo o inactividad del usuario
   if (!row.is_active) return { session: null, user: null };

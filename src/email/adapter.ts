@@ -1,4 +1,4 @@
-import nodemailer from 'nodemailer';
+import nodemailer, { type Transporter } from 'nodemailer';
 import { config } from '../config/env.js';
 
 export interface SentEmail {
@@ -31,9 +31,9 @@ export function isEmailConfigured(): boolean {
   );
 }
 
-let cachedTransporter: nodemailer.Transporter | null = null;
+let cachedTransporter: Transporter | null = null;
 
-function getTransporter(): nodemailer.Transporter | null {
+function getTransporter(): Transporter | null {
   if (!isEmailConfigured()) {
     return null;
   }

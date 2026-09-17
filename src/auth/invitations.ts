@@ -42,7 +42,7 @@ export async function createInvitation(
 
   const expiresAt = new Date(Date.now() + expiresInHours * 60 * 60 * 1000).toISOString();
 
-  await client.query("SELECT set_config('app.current_organization_id', $1, false)", [organizationId]);
+  await client.query("SELECT set_config('app.current_organization_id', $1, true)", [organizationId]);
 
   const res = await client.query(
     `INSERT INTO invitations (organization_id, workspace_id, email, role, token_hash, invited_by, expires_at)
@@ -73,7 +73,7 @@ export async function createInvitation(
  * Lista las invitaciones activas de una organización
  */
 export async function listInvitations(client: PoolClient, organizationId: string): Promise<Omit<Invitation, 'tokenHash'>[]> {
-  await client.query("SELECT set_config('app.current_organization_id', $1, false)", [organizationId]);
+  await client.query("SELECT set_config('app.current_organization_id', $1, true)", [organizationId]);
 
   const res = await client.query(
     `SELECT id, organization_id, workspace_id, email, role, invited_by, expires_at, consumed_at, created_at
@@ -105,7 +105,7 @@ export async function revokeInvitation(
 ): Promise<boolean> {
   const { invitationId, organizationId, revokedBy } = params;
 
-  await client.query("SELECT set_config('app.current_organization_id', $1, false)", [organizationId]);
+  await client.query("SELECT set_config('app.current_organization_id', $1, true)", [organizationId]);
 
   const res = await client.query(
     `UPDATE invitations
@@ -167,7 +167,7 @@ export async function acceptInvitation(
   const inv = invRes.rows[0];
 
   // Configurar variable de sesión RLS app.current_organization_id
-  await client.query("SELECT set_config('app.current_organization_id', $1, false)", [inv.organization_id]);
+  await client.query("SELECT set_config('app.current_organization_id', $1, true)", [inv.organization_id]);
 
   if (inv.consumed_at) {
     throw new Error('INVITATION_REUSED: La invitación ya ha sido consumida previamente.');

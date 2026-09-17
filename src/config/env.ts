@@ -78,7 +78,7 @@ function validateConfig(): AppConfig {
     host,
     appBaseUrl: appBaseUrl!,
     databaseUrl: databaseUrl!,
-    emailWorkerDatabaseUrl: emailWorkerDatabaseUrl || databaseUrl!,
+    emailWorkerDatabaseUrl: emailWorkerDatabaseUrl || undefined,
     redisUrl: redisUrl!,
     sessionSecret: sessionSecret!,
     mfaMasterKey: effectiveMfaMasterKey,

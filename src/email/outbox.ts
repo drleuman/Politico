@@ -1,5 +1,6 @@
 import type { Pool, PoolClient } from 'pg';
 import { sendInvitationEmail, sendPasswordResetEmail } from './adapter.js';
+import { encryptPayloadToken, decryptPayloadToken } from './crypto-payload.js';
 
 export interface EmailOutboxRow {
   id: string;
@@ -19,6 +20,7 @@ export interface EmailOutboxRow {
 /**
  * Encola un mensaje de correo electrónico dentro de una transacción de base de datos activa.
  * C-04: Mantiene la atomicidad DB/Outbox sin ejecutar SMTP bloqueante en la ruta HTTP.
+ * H-01: Cifra el token secreto del payload con AES-256-GCM antes de guardarlo en reposo.
  */
 export async function enqueueEmail(
   client: PoolClient | Pool,
@@ -26,18 +28,23 @@ export async function enqueueEmail(
   template: 'INVITATION' | 'PASSWORD_RESET',
   payload: Record<string, any>
 ): Promise<string> {
+  const encPayload = { ...payload };
+  if (encPayload.token && typeof encPayload.token === 'string') {
+    encPayload.token = encryptPayloadToken(encPayload.token);
+  }
+
   const res = await client.query<{ id: string }>(
     `INSERT INTO email_outbox (recipient, template, payload, status)
      VALUES ($1, $2, $3, 'PENDING')
      RETURNING id`,
-    [recipient, template, JSON.stringify(payload)]
+    [recipient, template, JSON.stringify(encPayload)]
   );
   return res.rows[0].id;
 }
 
 /**
  * Reclama y procesa los mensajes pendientes en email_outbox usando FOR UPDATE SKIP LOCKED (C-04).
- * Redacta tokens secretos del payload inmediatamente tras el envío exitoso (H-04).
+ * Redacta tokens secretos del payload inmediatamente tras el envío exitoso o fallo terminal (H-02, H-04).
  */
 export async function processEmailOutbox(
   pool: Pool,
@@ -83,13 +90,13 @@ export async function processEmailOutbox(
     // 3. Procesar individualmente los mensajes reclamados
     for (const msg of claimRes.rows) {
       const payloadObj = typeof msg.payload === 'string' ? JSON.parse(msg.payload) : { ...msg.payload };
-      const rawToken = payloadObj.token;
+      const rawToken = decryptPayloadToken(payloadObj.token);
 
       try {
         if (msg.template === 'INVITATION') {
-          await sendInvitationEmail(msg.recipient, rawToken, payloadObj.tenantName || 'Política Canon');
+          await sendInvitationEmail(msg.recipient, rawToken, payloadObj.tenantName || 'Política Canon', msg.id);
         } else if (msg.template === 'PASSWORD_RESET') {
-          await sendPasswordResetEmail(msg.recipient, rawToken);
+          await sendPasswordResetEmail(msg.recipient, rawToken, msg.id);
         } else {
           throw new Error(`PLANTILLA_NO_SOPORTADA: La plantilla de correo '${msg.template}' no es válida.`);
         }

@@ -1,11 +1,23 @@
-import { emailWorkerPool } from '../db/client.js';
+import { emailWorkerPool, checkEmailWorkerSecurity } from '../db/client.js';
 import { processEmailOutbox } from './outbox.js';
+import { config } from '../config/env.js';
 
 let isRunning = true;
 
 export async function startOutboxWorkerLoop(intervalMs: number = 5000): Promise<void> {
+  if (!config.emailWorkerDatabaseUrl) {
+    console.error('❌ ERROR FATAL (C-03): EMAIL_WORKER_DATABASE_URL no está configurada. El worker autónomo no puede utilizar la URL del rol web.');
+    process.exit(1);
+  }
+
+  const secCheck = await checkEmailWorkerSecurity(emailWorkerPool);
+  if (!secCheck.ok) {
+    console.error(`❌ ERROR FATAL (C-01, C-03): Falló la aserción de seguridad e identidad del worker: ${secCheck.error}`);
+    process.exit(1);
+  }
+
   const workerId = `outbox-worker-${process.pid}`;
-  console.log(`[EMAIL WORKER] Iniciando proceso de outbox (${workerId}) con intervalo de ${intervalMs}ms...`);
+  console.log(`[EMAIL WORKER] Identidad 'politica_canon_email_worker' verificada. Iniciando outbox (${workerId}) a ${intervalMs}ms...`);
 
   while (isRunning) {
     try {

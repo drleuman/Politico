@@ -71,7 +71,7 @@ export async function verifyEmailTransport(): Promise<boolean> {
   return false;
 }
 
-export async function sendInvitationEmail(to: string, token: string, tenantName: string = 'Política Canon'): Promise<void> {
+export async function sendInvitationEmail(to: string, token: string, tenantName: string = 'Política Canon', outboxId?: string): Promise<void> {
   if (!isEmailConfigured()) {
     throw new Error('EMAIL_NOT_CONFIGURED');
   }
@@ -90,6 +90,7 @@ export async function sendInvitationEmail(to: string, token: string, tenantName:
         subject,
         text,
         html,
+        messageId: outboxId ? `<outbox-${outboxId}@politica-canon.local>` : undefined,
       });
       return;
     } catch (err) {
@@ -111,7 +112,7 @@ export async function sendInvitationEmail(to: string, token: string, tenantName:
   throw new Error('EMAIL_NOT_CONFIGURED');
 }
 
-export async function sendPasswordResetEmail(to: string, token: string): Promise<void> {
+export async function sendPasswordResetEmail(to: string, token: string, outboxId?: string): Promise<void> {
   if (!isEmailConfigured()) {
     throw new Error('EMAIL_NOT_CONFIGURED');
   }
@@ -130,6 +131,7 @@ export async function sendPasswordResetEmail(to: string, token: string): Promise
         subject,
         text,
         html,
+        messageId: outboxId ? `<outbox-${outboxId}@politica-canon.local>` : undefined,
       });
       return;
     } catch (err) {

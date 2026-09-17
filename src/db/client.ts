@@ -11,11 +11,65 @@ export const dbPool = new Pool({
 });
 
 export const emailWorkerPool = new Pool({
-  connectionString: config.emailWorkerDatabaseUrl || config.databaseUrl,
+  connectionString: config.emailWorkerDatabaseUrl,
   max: 5,
   idleTimeoutMillis: 30000,
   connectionTimeoutMillis: 5000,
 });
+
+export async function checkEmailWorkerSecurity(pool: pg.Pool): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const client = await pool.connect();
+    try {
+      const res = await client.query(`
+        SELECT 
+          current_user AS db_user, 
+          rolsuper AS is_superuser, 
+          rolbypassrls AS bypass_rls,
+          rolcreatedb AS can_create_db,
+          rolcreaterole AS can_create_role,
+          has_table_privilege(current_user, 'public.email_outbox', 'SELECT') AS can_select,
+          has_table_privilege(current_user, 'public.email_outbox', 'UPDATE') AS can_update,
+          has_table_privilege(current_user, 'public.email_outbox', 'INSERT') AS can_insert
+        FROM pg_roles 
+        WHERE rolname = current_user;
+      `);
+
+      if (res.rows.length === 0) {
+        return { ok: false, error: 'NO_ROLE_FOUND: No se pudo verificar el rol de base de datos del worker.' };
+      }
+
+      const { db_user, is_superuser, bypass_rls, can_create_db, can_create_role, can_select, can_update, can_insert } = res.rows[0];
+
+      if (db_user !== 'politica_canon_email_worker') {
+        return {
+          ok: false,
+          error: `VIOLACIÓN DE AISLAMIENTO WORKER (C-01, C-03): El proceso worker está conectado como '${db_user}', se requiere estrictamente 'politica_canon_email_worker'.`,
+        };
+      }
+
+      if (is_superuser || bypass_rls || can_create_db || can_create_role) {
+        return {
+          ok: false,
+          error: `VIOLACIÓN DE MÍNIMOS PRIVILEGIOS WORKER (C-01): El rol worker '${db_user}' tiene privilegios excesivos (super=${is_superuser}, bypassrls=${bypass_rls}).`,
+        };
+      }
+
+      if (!can_select || !can_update || can_insert) {
+        return {
+          ok: false,
+          error: `VIOLACIÓN DE PRIVILEGIOS DML WORKER (H-04): El rol worker '${db_user}' tiene privilegios inválidos en email_outbox (select=${can_select}, update=${can_update}, insert=${can_insert}). Exigido select=true, update=true, insert=false.`,
+        };
+      }
+
+      return { ok: true };
+    } finally {
+      client.release();
+    }
+  } catch (err: any) {
+    return { ok: false, error: err.message || 'Worker database security check failed' };
+  }
+}
 
 export async function checkDatabaseHealth(): Promise<{ ok: boolean; error?: string }> {
   try {

@@ -110,7 +110,7 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON public.workspace_memberships TO app_user
 GRANT SELECT, INSERT, UPDATE, DELETE ON public.role_assignments TO app_user, politica_canon_app;
 GRANT SELECT, INSERT, UPDATE ON public.audit_outbox TO app_user, politica_canon_app;
 
--- C-01 & C-02 (v0.3.24): Creación y endurecimiento de rol LOGIN dedicado politica_canon_email_worker y grupo NOLOGIN email_worker
+-- C-01 & C-02 (v0.3.25): Creación y endurecimiento de rol LOGIN dedicado politica_canon_email_worker y grupo NOLOGIN email_worker (Sin contraseñas harcodeadas)
 DO $$
 BEGIN
     IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'email_worker') THEN
@@ -120,7 +120,7 @@ BEGIN
     END IF;
 
     IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'politica_canon_email_worker') THEN
-        CREATE ROLE politica_canon_email_worker WITH LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS ENCRYPTED PASSWORD 'email_worker_dev_pass';
+        CREATE ROLE politica_canon_email_worker WITH LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS;
     ELSE
         ALTER ROLE politica_canon_email_worker WITH LOGIN NOSUPERUSER NOCREATEROLE NOCREATEDB NOBYPASSRLS;
     END IF;
@@ -163,11 +163,12 @@ REVOKE INSERT, UPDATE, DELETE ON public.organizations, public.workspaces, public
 
 REVOKE INSERT, UPDATE, DELETE ON public.organizations, public.workspaces, public.authority_bodies, public.authority_memberships, public.decisions, public.decision_votes, public.publications, public.publication_events, public.audit_events FROM politica_canon_app;
 
--- Concesiones para audit_worker, audit_reader y email_worker (C-01, C-02)
+-- Concesiones para audit_worker, audit_reader y email_worker (C-01, C-02, H-04 Mínimos Privilegios Exactos)
 GRANT SELECT, INSERT, UPDATE ON public.audit_outbox TO audit_worker;
 GRANT SELECT, INSERT, UPDATE ON public.audit_events TO audit_worker;
 GRANT USAGE ON SCHEMA public TO email_worker, politica_canon_email_worker;
-GRANT SELECT, INSERT, UPDATE ON public.email_outbox TO email_worker, app_owner;
+REVOKE INSERT, DELETE ON public.email_outbox FROM email_worker, politica_canon_email_worker;
+GRANT SELECT, UPDATE ON public.email_outbox TO email_worker, app_owner;
 
 DO $$
 BEGIN

@@ -122,21 +122,22 @@ async function runPostBootstrap() {
     }
     console.log(`✅ Catálogo PG16: Rol LOGIN 'politica_canon_email_worker' verificado con membresía en 'email_worker' y mínimos privilegios.`);
 
-    // Aserción de privilegios sobre email_outbox: app_user solo INSERT; email_worker SELECT + UPDATE
+    // Aserción de privilegios sobre email_outbox: app_user solo INSERT; email_worker SELECT + UPDATE únicamente (H-04)
     const privCheck = await client.query(`
       SELECT 
         has_table_privilege('politica_canon_app', 'public.email_outbox', 'INSERT') AS app_can_insert,
         has_table_privilege('politica_canon_app', 'public.email_outbox', 'SELECT') AS app_can_select,
         has_table_privilege('politica_canon_app', 'public.email_outbox', 'UPDATE') AS app_can_update,
         has_table_privilege('politica_canon_email_worker', 'public.email_outbox', 'SELECT') AS worker_can_select,
-        has_table_privilege('politica_canon_email_worker', 'public.email_outbox', 'UPDATE') AS worker_can_update;
+        has_table_privilege('politica_canon_email_worker', 'public.email_outbox', 'UPDATE') AS worker_can_update,
+        has_table_privilege('politica_canon_email_worker', 'public.email_outbox', 'INSERT') AS worker_can_insert;
     `);
     const pc = privCheck.rows[0];
-    if (!pc.app_can_insert || pc.app_can_select || pc.app_can_update || !pc.worker_can_select || !pc.worker_can_update) {
-      console.error(`❌ ERROR FATAL (C-01/C-02): Privilegios DML en email_outbox inválidos: app(insert=${pc.app_can_insert}, select=${pc.app_can_select}, update=${pc.app_can_update}), worker(select=${pc.worker_can_select}, update=${pc.worker_can_update}).`);
+    if (!pc.app_can_insert || pc.app_can_select || pc.app_can_update || !pc.worker_can_select || !pc.worker_can_update || pc.worker_can_insert) {
+      console.error(`❌ ERROR FATAL (C-01/H-04): Privilegios DML en email_outbox inválidos: app(insert=${pc.app_can_insert}, select=${pc.app_can_select}), worker(select=${pc.worker_can_select}, update=${pc.worker_can_update}, insert=${pc.worker_can_insert}). Exigido web=INSERT únicamente, worker=SELECT/UPDATE únicamente.`);
       process.exit(1);
     }
-    console.log(`✅ Catálogo PG16: Matriz de privilegios DML en email_outbox verificada (web=INSERT únicamente, worker=SELECT/UPDATE).`);
+    console.log(`✅ Catálogo PG16: Matriz exacta de mínimos privilegios DML en email_outbox verificada (web=INSERT únicamente, worker=SELECT/UPDATE únicamente).`);
   } catch (err) {
     await client.query('ROLLBACK;').catch(() => {});
     console.error('❌ ERROR DURANTE FASE 3 POST-BOOTSTRAP:', err.message);

@@ -1,0 +1,4 @@
+# Enforce LF line endings on all shell scripts and SQL files to prevent heredoc/EOF syntax errors in Linux (C-01)
+*.sh text eol=lf
+*.bash text eol=lf
+*.sql text eol=lf

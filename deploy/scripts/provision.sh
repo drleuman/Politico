@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# Script de Provisión Inicial de Servidor — Política Canon v0.3.24
+# Script de Provisión Inicial de Servidor — Política Canon v0.3.25
 # Ejecutar en el servidor Ubuntu 24.04 / Plesk como root o con sudo
 
 set -euo pipefail
 
-echo "== [POLÍTICA CANON v0.3.24] Provisión Inicial de Servidor =="
+echo "== [POLÍTICA CANON v0.3.25] Provisión Inicial de Servidor =="
 
 # 1. Crear usuario del sistema sin shell interactiva y asociar pertenencia de grupo postgres (B-02)
 if ! id -u politica-canon >/dev/null 2>&1; then
@@ -61,7 +61,33 @@ if [ -z "${DERIVED_DB_URL}" ]; then
     exit 1
 fi
 
-# 5. Recuperar o generar SESSION_SECRET y MFA_MASTER_KEY (32+ bytes / 64+ hex)
+# 5. Generar/Preservar secreto independiente para el worker y asignar contraseña PostgreSQL (C-02)
+EXISTING_WORKER_PASS=""
+if [ -f /etc/politica-canon/runtime.env ]; then
+    EXISTING_WORKER_PASS=$(grep -E '^POLITICA_CANON_WORKER_DB_PASS=' /etc/politica-canon/runtime.env | cut -d'=' -f2- || true)
+fi
+if [ -z "${EXISTING_WORKER_PASS}" ] && [ -f /root/politica-canon/runtime.env ]; then
+    EXISTING_WORKER_PASS=$(grep -E '^POLITICA_CANON_WORKER_DB_PASS=' /root/politica-canon/runtime.env | cut -d'=' -f2- || true)
+fi
+
+if [ -n "${EXISTING_WORKER_PASS}" ]; then
+    WORKER_DB_PASS="${EXISTING_WORKER_PASS}"
+    echo "[+] Preservando secrecto existente de politica_canon_email_worker."
+else
+    WORKER_DB_PASS=$(openssl rand -hex 24 || head -c 48 /dev/urandom | xxd -p | tr -d '\n')
+    echo "[+] Generada nueva contraseña independiente para politica_canon_email_worker."
+fi
+
+# Asignar la contraseña al rol politica_canon_email_worker en PostgreSQL como superusuario postgres
+if command -v psql >/dev/null 2>&1; then
+    echo "[+] Asignando contraseña a rol PostgreSQL 'politica_canon_email_worker'..."
+    su - postgres -c "psql -d politica_canon -c \"ALTER ROLE politica_canon_email_worker WITH PASSWORD '${WORKER_DB_PASS}';\"" 2>/dev/null || true
+fi
+
+# Construir URL explícita del worker con su secrecto independiente
+DERIVED_EMAIL_WORKER_URL="postgresql://politica_canon_email_worker:${WORKER_DB_PASS}@127.0.0.1:5432/politica_canon"
+
+# 6. Recuperar o generar SESSION_SECRET y MFA_MASTER_KEY (32+ bytes / 64+ hex)
 EXISTING_SESSION_SECRET=""
 EXISTING_MFA_KEY=""
 EXISTING_SMTP_HOST=""
@@ -112,15 +138,14 @@ else
     echo "[+] Generada nueva MFA_MASTER_KEY independiente de 32 bytes (64 hex)."
 fi
 
-# 6. Escribir /etc/politica-canon/runtime.env.tmp de forma atómica y restrictiva con umask 0077
-DERIVED_EMAIL_WORKER_URL=$(echo "${DERIVED_DB_URL}" | sed 's/politica_canon_app/politica_canon_email_worker/g')
+# 7. Escribir /etc/politica-canon/runtime.env.tmp de forma atómica y restrictiva con umask 0077
 TMP_ENV="/etc/politica-canon/runtime.env.tmp"
 (
     umask 0077
     touch "${TMP_ENV}"
     chmod 0640 "${TMP_ENV}"
     cat <<EOF > "${TMP_ENV}"
-# Configuración de tiempo de ejecución Política Canon v0.3.24
+# Configuración de tiempo de ejecución Política Canon v0.3.25
 NODE_ENV=production
 PORT=3000
 HOST=127.0.0.1
@@ -128,6 +153,7 @@ APP_BASE_URL=https://peaceful-johnson.194-164-175-146.plesk.page
 REDIS_URL=redis://127.0.0.1:6379/0
 DATABASE_URL=${DERIVED_DB_URL}
 EMAIL_WORKER_DATABASE_URL=${DERIVED_EMAIL_WORKER_URL}
+POLITICA_CANON_WORKER_DB_PASS=${WORKER_DB_PASS}
 SESSION_SECRET=${SESSION_SECRET}
 MFA_MASTER_KEY=${MFA_MASTER_KEY}
 SMTP_HOST=${EXISTING_SMTP_HOST}
@@ -140,7 +166,7 @@ EOF
 )
 
 # Validar contenido obligatorio antes de reemplazar
-if ! grep -q "^SESSION_SECRET=" "${TMP_ENV}" || ! grep -q "^MFA_MASTER_KEY=" "${TMP_ENV}" || ! grep -q "^DATABASE_URL=" "${TMP_ENV}"; then
+if ! grep -q "^SESSION_SECRET=" "${TMP_ENV}" || ! grep -q "^MFA_MASTER_KEY=" "${TMP_ENV}" || ! grep -q "^DATABASE_URL=" "${TMP_ENV}" || ! grep -q "^EMAIL_WORKER_DATABASE_URL=" "${TMP_ENV}"; then
     echo "❌ ERROR FATAL: El archivo de entorno temporal no contiene las variables obligatorias. Abortando provisión."
     rm -f "${TMP_ENV}"
     exit 1
@@ -151,24 +177,37 @@ chown root:politica-canon /etc/politica-canon/runtime.env
 chmod 0640 /etc/politica-canon/runtime.env
 echo "[+] Archivo /etc/politica-canon/runtime.env configurado de forma atómica con propietario root:politica-canon y modo 0640."
 
-# 7. Instalar unidades de servicio systemd (web y outbox worker) (C-02)
+# 8. Instalar e Iniciar Unidades de Servicio Systemd (C-04 Incondicional y Fail-Closed)
 if [ -f /opt/politica-canon/app/deploy/systemd/politica-canon.service ]; then
     echo "[+] Instalando servicio web systemd..."
     cp /opt/politica-canon/app/deploy/systemd/politica-canon.service /etc/systemd/system/
+else
+    echo "❌ ERROR FATAL: /opt/politica-canon/app/deploy/systemd/politica-canon.service no encontrado."
+    exit 1
 fi
+
 if [ -f /opt/politica-canon/app/deploy/systemd/politica-canon-outbox-worker.service ]; then
     echo "[+] Instalando servicio worker autónomo de correo outbox systemd..."
     cp /opt/politica-canon/app/deploy/systemd/politica-canon-outbox-worker.service /etc/systemd/system/
+else
+    echo "❌ ERROR FATAL: /opt/politica-canon/app/deploy/systemd/politica-canon-outbox-worker.service no encontrado."
+    exit 1
 fi
 
+echo "[+] Recargando unidades systemd y habilitando servicios..."
 systemctl daemon-reload
-if systemctl is-active --quiet politica-canon.service 2>/dev/null || systemctl is-enabled --quiet politica-canon.service 2>/dev/null; then
-    systemctl enable --now politica-canon.service || true
+systemctl enable --now politica-canon.service
+systemctl enable --now politica-canon-outbox-worker.service
+
+# Verificación Fail-Closed de Estado Activo
+if ! systemctl is-active --quiet politica-canon.service; then
+    echo "❌ ERROR FATAL: politica-canon.service no se encuentra en estado activo tras la provisión."
+    exit 1
 fi
-if systemctl is-active --quiet politica-canon-outbox-worker.service 2>/dev/null || systemctl is-enabled --quiet politica-canon-outbox-worker.service 2>/dev/null; then
-    systemctl enable --now politica-canon-outbox-worker.service || true
+
+if ! systemctl is-active --quiet politica-canon-outbox-worker.service; then
+    echo "❌ ERROR FATAL: politica-canon-outbox-worker.service no se encuentra en estado activo tras la provisión."
+    exit 1
 fi
 
-echo "== [POLÍTICA CANON v0.3.24] Provisión completada exitosamente =="
-
-
+echo "== [POLÍTICA CANON v0.3.25] Provisión completada exitosamente =="

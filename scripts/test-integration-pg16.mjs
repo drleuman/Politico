@@ -404,7 +404,22 @@ async function runIntegrationTest() {
     });
     if (forgotRes.statusCode !== 200) throw new Error(`forgot-password falló: ${forgotRes.payload}`);
 
-    await processEmailOutbox(dbPool);
+    // Verificar H-01: El token en PENDING está cifrado (enc:...) antes de ser procesado por el worker
+    const workerClientPending = await emailWorkerPool.connect();
+    try {
+      const pendingRows = await workerClientPending.query("SELECT payload FROM email_outbox WHERE status = 'PENDING' ORDER BY id DESC LIMIT 1;");
+      if (pendingRows.rows.length > 0) {
+        const payload = pendingRows.rows[0].payload;
+        if (payload.token && !payload.token.startsWith('enc:')) {
+          throw new Error(`H-01 Test FAIL: El token en reposo PENDING no está cifrado. Payload: ${JSON.stringify(payload)}`);
+        }
+        console.log("✅ H-01 Cifrado en Reposo: Token en estado PENDING almacenado con cifrado AES-256-GCM (enc:...).");
+      }
+    } finally {
+      workerClientPending.release();
+    }
+
+    await processEmailOutbox(emailWorkerPool, 'worker-reset-pg16');
 
     // Obtener token de reset desde Mailpit
     const resetMailpit = await fetchMailpitMessages();

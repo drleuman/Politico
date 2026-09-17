@@ -110,7 +110,27 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON public.workspace_memberships TO app_user
 GRANT SELECT, INSERT, UPDATE, DELETE ON public.role_assignments TO app_user, politica_canon_app;
 GRANT SELECT, INSERT, UPDATE ON public.audit_outbox TO app_user, politica_canon_app;
 
--- C-02: La aplicación runtime solo requiere INSERT sobre email_outbox (el worker procesa)
+-- C-01 & C-02 (v0.3.24): Creación y endurecimiento de rol LOGIN dedicado politica_canon_email_worker y grupo NOLOGIN email_worker
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'email_worker') THEN
+        CREATE ROLE email_worker WITH NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS;
+    ELSE
+        ALTER ROLE email_worker WITH NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS;
+    END IF;
+
+    IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'politica_canon_email_worker') THEN
+        CREATE ROLE politica_canon_email_worker WITH LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS ENCRYPTED PASSWORD 'email_worker_dev_pass';
+    ELSE
+        ALTER ROLE politica_canon_email_worker WITH LOGIN NOSUPERUSER NOCREATEROLE NOCREATEDB NOBYPASSRLS;
+    END IF;
+END $$;
+
+GRANT email_worker TO politica_canon_email_worker;
+GRANT CONNECT ON DATABASE politica_canon TO politica_canon_email_worker, email_worker;
+
+-- C-01 / C-02: La aplicación web runtime solo requiere INSERT sobre email_outbox (el worker autónomo procesa)
+REVOKE SELECT, UPDATE, DELETE ON public.email_outbox FROM app_user, politica_canon_app;
 GRANT INSERT ON public.email_outbox TO app_user, politica_canon_app;
 
 -- Concesión acotada para token_resolver (BYPASSRLS)
@@ -136,17 +156,17 @@ BEGIN
     END IF;
 END $$;
 
-GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO app_user, politica_canon_app;
+GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO app_user, politica_canon_app, email_worker, politica_canon_email_worker;
 
 -- Revocación explícita de escritura directa en tablas inmutables de decisiones, publicaciones y auditoría eventos
 REVOKE INSERT, UPDATE, DELETE ON public.organizations, public.workspaces, public.authority_bodies, public.authority_memberships, public.decisions, public.decision_votes, public.publications, public.publication_events, public.audit_events FROM app_user;
 
 REVOKE INSERT, UPDATE, DELETE ON public.organizations, public.workspaces, public.authority_bodies, public.authority_memberships, public.decisions, public.decision_votes, public.publications, public.publication_events, public.audit_events FROM politica_canon_app;
 
--- Concesiones para audit_worker, audit_reader y email_worker (C-02)
+-- Concesiones para audit_worker, audit_reader y email_worker (C-01, C-02)
 GRANT SELECT, INSERT, UPDATE ON public.audit_outbox TO audit_worker;
 GRANT SELECT, INSERT, UPDATE ON public.audit_events TO audit_worker;
-GRANT USAGE ON SCHEMA public TO email_worker;
+GRANT USAGE ON SCHEMA public TO email_worker, politica_canon_email_worker;
 GRANT SELECT, INSERT, UPDATE ON public.email_outbox TO email_worker, app_owner;
 
 DO $$

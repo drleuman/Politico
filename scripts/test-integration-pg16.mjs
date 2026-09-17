@@ -3,12 +3,13 @@ import pg from 'pg';
 import http from 'http';
 const { Client } = pg;
 
-console.log('=== RUNNER DE INTEGRACIÓN REAL POSTGRESQL 16, REDIS 7 & MAILPIT SMTP (v0.3.21 CERTIFICADO) ===\n');
+console.log('=== RUNNER DE INTEGRACIÓN REAL POSTGRESQL 16, REDIS 7 & MAILPIT SMTP (v0.3.24 CERTIFICADO) ===\n');
 
 const ADMIN_URL = process.env.POLITICA_CANON_ADMIN_DATABASE_URL || 'postgresql://postgres:audit_dev_only_secret_do_not_use_in_prod@127.0.0.1:15432/politica_canon';
 const MIGRATION_URL = process.env.MIGRATION_DATABASE_URL || ADMIN_URL;
 const APP_TEST_PASSWORD = process.env.POLITICA_CANON_APP_TEST_PASSWORD || 'audit_dev_only_secret_do_not_use_in_prod';
 const APP_URL = process.env.DATABASE_URL || `postgresql://politica_canon_app:${APP_TEST_PASSWORD}@127.0.0.1:15432/politica_canon`;
+const WORKER_URL = process.env.EMAIL_WORKER_DATABASE_URL || `postgresql://politica_canon_email_worker:${APP_TEST_PASSWORD}@127.0.0.1:15432/politica_canon`;
 const REDIS_URL = process.env.REDIS_URL || 'redis://127.0.0.1:16379/0';
 const SESSION_SECRET = process.env.SESSION_SECRET || '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef';
 const MFA_MASTER_KEY = process.env.MFA_MASTER_KEY || 'fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210';
@@ -19,6 +20,7 @@ const SMTP_PORT = process.env.SMTP_PORT || '11025';
 process.env.POLITICA_CANON_ADMIN_DATABASE_URL = ADMIN_URL;
 process.env.MIGRATION_DATABASE_URL = MIGRATION_URL;
 process.env.DATABASE_URL = APP_URL;
+process.env.EMAIL_WORKER_DATABASE_URL = WORKER_URL;
 process.env.REDIS_URL = REDIS_URL;
 process.env.SESSION_SECRET = SESSION_SECRET;
 process.env.MFA_MASTER_KEY = MFA_MASTER_KEY;
@@ -128,11 +130,12 @@ async function runIntegrationTest() {
       
       runScript('scripts/bootstrap-pre.mjs');
 
-      console.log(`🔑 [C-02 TEST SETUP] Asignando contraseña exclusiva de prueba al rol runtime 'politica_canon_app'...`);
+      console.log(`🔑 [C-01/C-02 TEST SETUP] Asignando contraseña de prueba a 'politica_canon_app' y 'politica_canon_email_worker'...`);
       const adminClient = new Client({ connectionString: ADMIN_URL });
       await adminClient.connect();
       await adminClient.query(`ALTER ROLE politica_canon_app WITH PASSWORD '${APP_TEST_PASSWORD}';`);
-      console.log("✅ [C-02 TEST SETUP] Contraseña de prueba asignada a 'politica_canon_app'.");
+      await adminClient.query(`ALTER ROLE politica_canon_email_worker WITH PASSWORD '${APP_TEST_PASSWORD}';`);
+      console.log("✅ [C-01/C-02 TEST SETUP] Contraseñas de prueba asignadas a los roles web y worker.");
 
       runScript('scripts/migrate-production.mjs');
       runScript('scripts/bootstrap-post.mjs');
@@ -299,10 +302,26 @@ async function runIntegrationTest() {
       throw new Error(`Creación de invitación falló: ${invRes.payload}`);
     }
     
-    // Forzar procesado del outbox de correo
+    // Forzar procesado del outbox de correo usando el pool del worker (politica_canon_email_worker) (C-01)
     const { processEmailOutbox } = await import('../dist/email/outbox.js');
-    const { dbPool } = await import('../dist/db/client.js');
-    await processEmailOutbox(dbPool);
+    const { emailWorkerPool, dbPool } = await import('../dist/db/client.js');
+
+    // C-01 PRUEBA NEGATIVA: El rol web (politica_canon_app) debe fallar al intentar SELECT o UPDATE en email_outbox
+    const appClientTest = await dbPool.connect();
+    try {
+      await appClientTest.query("SELECT * FROM email_outbox LIMIT 1;");
+      throw new Error("CRITICAL FAIL C-01: politica_canon_app pudo ejecutar SELECT en email_outbox. Se requiere permission denied.");
+    } catch (permErr) {
+      if (!permErr.message.includes('permission denied')) {
+        throw new Error(`CRITICAL FAIL C-01: Se esperaba 'permission denied' para politica_canon_app, se obtuvo: ${permErr.message}`);
+      }
+      console.log("✅ C-01 Prueba Negativa: El rol web (politica_canon_app) fue rechazado con 'permission denied' al intentar SELECT en email_outbox.");
+    } finally {
+      appClientTest.release();
+    }
+
+    // Procesado autenticado con la identidad dedicada del worker (politica_canon_email_worker)
+    await processEmailOutbox(emailWorkerPool, 'worker-test-pg16');
 
     // Obtener mensaje transmitido por SMTP a Mailpit desde su API REST en puerto 18025
     const mailpitData = await fetchMailpitMessages();
@@ -488,17 +507,31 @@ async function runIntegrationTest() {
     }
     console.log('✅ C-02 Jerarquía Multi-Rol: Un COORDINATOR no puede modificar un objetivo que posee rol ADMIN entre sus múltiples asignaciones (Rechazado HTTP 403).');
 
-    // 10. C-03 & H-02 PRUEBA DE OUTBOX Y MANEJO DE ERROR SMTP
-    console.log('\n--- PRUEBA E2E C-03: OUTBOX TRANSACCIONAL Y RESILIENCIA ANTE FALLO SMTP ---');
+    // 10. C-03 & H-02 PRUEBA DE OUTBOX CON WORKER DEDICADO Y REDACCIÓN TERMINAL EN ESTADO FAILED
+    console.log('\n--- PRUEBA E2E C-01, C-03 & H-02: OUTBOX CON WORKER DEDICADO Y REDACCIÓN TERMINAL FAILED ---');
     const { enqueueEmail } = await import('../dist/email/outbox.js');
     await enqueueEmail(dbPool, 'inexistente@invalid-smtp-target.local', 'INVITATION', { token: 'test-token-invalid-smtp', tenantName: 'Test' });
     
-    // processEmailOutbox no debe lanzar excepción ni corromper transacciones
-    const outboxResult = await processEmailOutbox(dbPool);
-    if (typeof outboxResult.processed !== 'number') {
-      throw new Error('C-03 Test: processEmailOutbox no devolvió estadísticas válidas.');
+    // Forzar 5 reintentos fallidos para probar transición a FAILED y redacción de token en reposo
+    for (let attempt = 1; attempt <= 5; attempt++) {
+      const adminDbForRetry = new Client({ connectionString: ADMIN_URL });
+      await adminDbForRetry.connect();
+      await adminDbForRetry.query("UPDATE email_outbox SET next_attempt_at = NOW() - INTERVAL '1 minute' WHERE recipient = 'inexistente@invalid-smtp-target.local';");
+      await adminDbForRetry.end();
+
+      await processEmailOutbox(emailWorkerPool, 'worker-retry-test');
     }
-    console.log('✅ C-03 Outbox: Procesamiento asíncrono e idempotente verificado con éxito.');
+
+    const adminDbCheckFailed = new Client({ connectionString: ADMIN_URL });
+    await adminDbCheckFailed.connect();
+    const failedRowRes = await adminDbCheckFailed.query("SELECT status, attempts, payload FROM email_outbox WHERE recipient = 'inexistente@invalid-smtp-target.local';");
+    await adminDbCheckFailed.end();
+
+    const failedRow = failedRowRes.rows[0];
+    if (!failedRow || failedRow.status !== 'FAILED' || failedRow.payload.token !== '[REDACTED]') {
+      throw new Error(`CRITICAL FAIL H-02: El mensaje no alcanzó FAILED con token redactado. Estado: ${failedRow?.status}, Token: ${failedRow?.payload?.token}`);
+    }
+    console.log('✅ H-02 Redacción Terminal: Tras 5 reintentos fallidos, el mensaje entró en estado FAILED y el token fue redactado a [REDACTED].');
 
     // 11. C-03 PRUEBA ADVERSARIAL: Mutación cross-tenant rechazada con 404
     const crossTenantMutateRes = await fastifyApp.inject({
@@ -655,7 +688,7 @@ async function runIntegrationTest() {
 
     await dbClientC02.end();
 
-    console.log('\n🎉 SUITE DE INTEGRACIÓN FASE 1.1 REMEDIADA (v0.3.22) COMPLETA Y CERTIFICADA (PASS)');
+    console.log('\n🎉 SUITE DE INTEGRACIÓN FASE 1.1 REMEDIADA (v0.3.24) COMPLETA Y CERTIFICADA (PASS)');
 
   } finally {
     if (fastifyApp) {

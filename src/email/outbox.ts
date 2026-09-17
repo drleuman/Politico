@@ -82,49 +82,61 @@ export async function processEmailOutbox(
 
     // 3. Procesar individualmente los mensajes reclamados
     for (const msg of claimRes.rows) {
-      try {
-        const payloadObj = typeof msg.payload === 'string' ? JSON.parse(msg.payload) : { ...msg.payload };
-        const rawToken = payloadObj.token;
+      const payloadObj = typeof msg.payload === 'string' ? JSON.parse(msg.payload) : { ...msg.payload };
+      const rawToken = payloadObj.token;
 
+      try {
         if (msg.template === 'INVITATION') {
           await sendInvitationEmail(msg.recipient, rawToken, payloadObj.tenantName || 'Política Canon');
         } else if (msg.template === 'PASSWORD_RESET') {
           await sendPasswordResetEmail(msg.recipient, rawToken);
+        } else {
+          throw new Error(`PLANTILLA_NO_SOPORTADA: La plantilla de correo '${msg.template}' no es válida.`);
         }
 
-        // Redactar secreto del payload (H-04) tras entrega exitosa
+        // Redactar secreto del payload (H-02, H-04) tras entrega exitosa (estado terminal SENT)
         if (payloadObj.token) {
           payloadObj.token = '[REDACTED]';
         }
 
-        await client.query(
+        const updateRes = await client.query(
           `UPDATE email_outbox
            SET status = 'SENT',
                payload = $1,
                processed_at = NOW(),
                locked_at = NULL,
                locked_by = NULL
-           WHERE id = $2`,
-          [JSON.stringify(payloadObj), msg.id]
+           WHERE id = $2 AND locked_by = $3 AND status = 'PROCESSING'`,
+          [JSON.stringify(payloadObj), msg.id, workerId]
         );
-        processed++;
+        if (updateRes.rowCount && updateRes.rowCount > 0) {
+          processed++;
+        } else {
+          console.warn(`[OUTBOX] Advertencia H-03: No se actualizó el mensaje '${msg.id}' a SENT porque el lease no pertenecía al worker '${workerId}'.`);
+        }
       } catch (err: any) {
         failed++;
         const nextAttempts = msg.attempts + 1;
         const newStatus = nextAttempts >= 5 ? 'FAILED' : 'PENDING';
-        // Backoff exponencial simple: 30s, 60s, 120s...
+        // Backoff lineal: 30s, 60s, 90s, 120s, 150s
         const backoffSeconds = nextAttempts * 30;
+
+        // Redactar secreto del payload si se alcanza el estado terminal FAILED (H-02)
+        if (newStatus === 'FAILED' && payloadObj.token) {
+          payloadObj.token = '[REDACTED]';
+        }
 
         await client.query(
           `UPDATE email_outbox
            SET status = $1,
                attempts = $2,
                last_error = $3,
-               next_attempt_at = NOW() + ($4 || ' seconds')::interval,
+               payload = $4,
+               next_attempt_at = NOW() + ($5 || ' seconds')::interval,
                locked_at = NULL,
                locked_by = NULL
-           WHERE id = $5`,
-          [newStatus, nextAttempts, err.message || String(err), backoffSeconds, msg.id]
+           WHERE id = $6 AND locked_by = $7 AND status = 'PROCESSING'`,
+          [newStatus, nextAttempts, err.message || String(err), JSON.stringify(payloadObj), backoffSeconds, msg.id, workerId]
         );
       }
     }

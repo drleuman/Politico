@@ -1,9 +1,9 @@
-# Informe de Despliegue y Guía de Aprovisionamiento — Política Canon v0.3.23 (Fase 1.1)
+# Informe de Despliegue y Guía de Aprovisionamiento — Política Canon v0.3.24 (Fase 1.1)
 
 **Fecha de Informe:** 17 de septiembre de 2026  
 **Línea Base Productiva Certificada:** Tag `v0.3.17` (`ed74688`)  
 **Servidor de Producción Activo:** Versión `v0.3.11` (Plesk / Ubuntu 24.04)  
-**Candidato en Auditoría Independiente:** Release Candidate `v0.3.23` (Rama `release/v0.3.23-candidate`)  
+**Candidato en Auditoría Independiente:** Release Candidate `v0.3.24` (Rama `release/v0.3.24-candidate`)  
 **Dominio Target:** `peaceful-johnson.194-164-175-146.plesk.page`  
 **Entorno de Servidor:** Plesk Obsidian 18.0.80 / Ubuntu 24.04.5 LTS  
 **Motor de Aplicación:** Node.js 22.23.2 / Fastify TypeScript Monolith  

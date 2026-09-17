@@ -10,6 +10,13 @@ export const dbPool = new Pool({
   connectionTimeoutMillis: 5000,
 });
 
+export const emailWorkerPool = new Pool({
+  connectionString: config.emailWorkerDatabaseUrl || config.databaseUrl,
+  max: 5,
+  idleTimeoutMillis: 30000,
+  connectionTimeoutMillis: 5000,
+});
+
 export async function checkDatabaseHealth(): Promise<{ ok: boolean; error?: string }> {
   try {
     const client = await dbPool.connect();

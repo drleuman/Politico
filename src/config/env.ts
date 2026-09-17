@@ -10,6 +10,7 @@ export interface AppConfig {
   host: string;
   appBaseUrl: string;
   databaseUrl: string;
+  emailWorkerDatabaseUrl?: string;
   redisUrl: string;
   sessionSecret: string;
   mfaMasterKey: string;
@@ -28,6 +29,7 @@ function validateConfig(): AppConfig {
   
   const appBaseUrl = process.env.APP_BASE_URL;
   const databaseUrl = process.env.DATABASE_URL || process.env.POLITICA_CANON_DATABASE_URL;
+  const emailWorkerDatabaseUrl = process.env.EMAIL_WORKER_DATABASE_URL;
   const redisUrl = process.env.REDIS_URL;
   const sessionSecret = process.env.SESSION_SECRET;
   const mfaMasterKey = process.env.MFA_MASTER_KEY || process.env.SESSION_SECRET; // Fallback to sessionSecret for dev if not set, but validate length
@@ -76,6 +78,7 @@ function validateConfig(): AppConfig {
     host,
     appBaseUrl: appBaseUrl!,
     databaseUrl: databaseUrl!,
+    emailWorkerDatabaseUrl: emailWorkerDatabaseUrl || databaseUrl!,
     redisUrl: redisUrl!,
     sessionSecret: sessionSecret!,
     mfaMasterKey: effectiveMfaMasterKey,

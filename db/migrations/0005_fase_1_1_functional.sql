@@ -24,11 +24,11 @@ CREATE POLICY tenant_isolation_policy ON mfa_backup_codes FOR ALL
   USING (organization_id = NULLIF(current_setting('app.current_organization_id', true), '')::UUID)
   WITH CHECK (organization_id = NULLIF(current_setting('app.current_organization_id', true), '')::UUID);
 
--- 2. TABLA OUTBOX TRANSACCIONAL Y DURADERA DE CORREO ELECTRÓNICO (C-04)
+-- 2. TABLA OUTBOX TRANSACCIONAL Y DURADERA DE CORREO ELECTRÓNICO (C-04, H-04)
 CREATE TABLE IF NOT EXISTS email_outbox (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   recipient VARCHAR(255) NOT NULL,
-  template VARCHAR(50) NOT NULL,
+  template VARCHAR(50) NOT NULL CONSTRAINT email_outbox_template_check CHECK (template IN ('INVITATION', 'PASSWORD_RESET')),
   payload JSONB NOT NULL,
   status VARCHAR(20) NOT NULL DEFAULT 'PENDING', -- PENDING, PROCESSING, SENT, FAILED
   attempts INT NOT NULL DEFAULT 0,

@@ -1,7 +1,18 @@
-import { dbPool, closeDbPool } from '../dist/db/client.js';
+import pg from 'pg';
 import { processEmailOutbox } from '../dist/email/outbox.js';
+import { config } from '../dist/config/env.js';
 
-console.log('=== WORKER AUTÓNOMO DE CORREO ELECTRÓNICO OUTBOX — POLÍTICA CANON v0.3.23 ===');
+const { Pool } = pg;
+const workerDbUrl = process.env.EMAIL_WORKER_DATABASE_URL || config.emailWorkerDatabaseUrl || config.databaseUrl;
+
+const workerPool = new Pool({
+  connectionString: workerDbUrl,
+  max: 5,
+  idleTimeoutMillis: 30000,
+  connectionTimeoutMillis: 5000,
+});
+
+console.log('=== WORKER AUTÓNOMO DE CORREO ELECTRÓNICO OUTBOX — POLÍTICA CANON v0.3.24 ===');
 
 let running = true;
 const workerId = `email-worker-${process.pid}`;
@@ -12,7 +23,7 @@ async function runWorkerLoop() {
   const shutdown = async (signal) => {
     console.log(`[OUTBOX WORKER] Apagando worker (${signal})...`);
     running = false;
-    await closeDbPool().catch(() => {});
+    await workerPool.end().catch(() => {});
     process.exit(0);
   };
 
@@ -21,7 +32,7 @@ async function runWorkerLoop() {
 
   while (running) {
     try {
-      const { processed, failed } = await processEmailOutbox(dbPool, workerId);
+      const { processed, failed } = await processEmailOutbox(workerPool, workerId);
       if (processed > 0 || failed > 0) {
         console.log(`[OUTBOX WORKER] Procesados: ${processed}, Fallidos: ${failed}`);
       }

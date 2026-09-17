@@ -104,6 +104,39 @@ async function runPostBootstrap() {
       process.exit(1);
     }
     console.log(`✅ Catálogo PG16: revoke_all_user_sessions_sec pertenece a '${fnOwner}' (BYPASSRLS).`);
+
+    // Aserción C-01 & C-02 (v0.3.24): Verificación de rol LOGIN dedicado politica_canon_email_worker y permisos DML
+    const workerRoleCheck = await client.query(`
+      SELECT r.rolcanlogin, r.rolsuper, r.rolcreatedb, r.rolcreaterole, r.rolbypassrls,
+             pg_has_role('politica_canon_email_worker', 'email_worker', 'member') AS is_worker_member
+      FROM pg_roles r WHERE r.rolname = 'politica_canon_email_worker';
+    `);
+    if (workerRoleCheck.rows.length === 0) {
+      console.error("❌ ERROR FATAL (C-01): El rol LOGIN 'politica_canon_email_worker' no fue creado.");
+      process.exit(1);
+    }
+    const wr = workerRoleCheck.rows[0];
+    if (!wr.rolcanlogin || wr.rolsuper || wr.rolcreatedb || wr.rolcreaterole || wr.rolbypassrls || !wr.is_worker_member) {
+      console.error(`❌ ERROR FATAL (C-01): Atributos inválidos en 'politica_canon_email_worker' (login=${wr.rolcanlogin}, super=${wr.rolsuper}, member=${wr.is_worker_member}).`);
+      process.exit(1);
+    }
+    console.log(`✅ Catálogo PG16: Rol LOGIN 'politica_canon_email_worker' verificado con membresía en 'email_worker' y mínimos privilegios.`);
+
+    // Aserción de privilegios sobre email_outbox: app_user solo INSERT; email_worker SELECT + UPDATE
+    const privCheck = await client.query(`
+      SELECT 
+        has_table_privilege('politica_canon_app', 'public.email_outbox', 'INSERT') AS app_can_insert,
+        has_table_privilege('politica_canon_app', 'public.email_outbox', 'SELECT') AS app_can_select,
+        has_table_privilege('politica_canon_app', 'public.email_outbox', 'UPDATE') AS app_can_update,
+        has_table_privilege('politica_canon_email_worker', 'public.email_outbox', 'SELECT') AS worker_can_select,
+        has_table_privilege('politica_canon_email_worker', 'public.email_outbox', 'UPDATE') AS worker_can_update;
+    `);
+    const pc = privCheck.rows[0];
+    if (!pc.app_can_insert || pc.app_can_select || pc.app_can_update || !pc.worker_can_select || !pc.worker_can_update) {
+      console.error(`❌ ERROR FATAL (C-01/C-02): Privilegios DML en email_outbox inválidos: app(insert=${pc.app_can_insert}, select=${pc.app_can_select}, update=${pc.app_can_update}), worker(select=${pc.worker_can_select}, update=${pc.worker_can_update}).`);
+      process.exit(1);
+    }
+    console.log(`✅ Catálogo PG16: Matriz de privilegios DML en email_outbox verificada (web=INSERT únicamente, worker=SELECT/UPDATE).`);
   } catch (err) {
     await client.query('ROLLBACK;').catch(() => {});
     console.error('❌ ERROR DURANTE FASE 3 POST-BOOTSTRAP:', err.message);

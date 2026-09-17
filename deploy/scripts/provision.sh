@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# Script de Provisión Inicial de Servidor — Política Canon v0.3.23
+# Script de Provisión Inicial de Servidor — Política Canon v0.3.24
 # Ejecutar en el servidor Ubuntu 24.04 / Plesk como root o con sudo
 
 set -euo pipefail
 
-echo "== [POLÍTICA CANON v0.3.23] Provisión Inicial de Servidor =="
+echo "== [POLÍTICA CANON v0.3.24] Provisión Inicial de Servidor =="
 
 # 1. Crear usuario del sistema sin shell interactiva y asociar pertenencia de grupo postgres (B-02)
 if ! id -u politica-canon >/dev/null 2>&1; then
@@ -113,19 +113,21 @@ else
 fi
 
 # 6. Escribir /etc/politica-canon/runtime.env.tmp de forma atómica y restrictiva con umask 0077
+DERIVED_EMAIL_WORKER_URL=$(echo "${DERIVED_DB_URL}" | sed 's/politica_canon_app/politica_canon_email_worker/g')
 TMP_ENV="/etc/politica-canon/runtime.env.tmp"
 (
     umask 0077
     touch "${TMP_ENV}"
     chmod 0640 "${TMP_ENV}"
     cat <<EOF > "${TMP_ENV}"
-# Configuración de tiempo de ejecución Política Canon v0.3.21
+# Configuración de tiempo de ejecución Política Canon v0.3.24
 NODE_ENV=production
 PORT=3000
 HOST=127.0.0.1
 APP_BASE_URL=https://peaceful-johnson.194-164-175-146.plesk.page
 REDIS_URL=redis://127.0.0.1:6379/0
 DATABASE_URL=${DERIVED_DB_URL}
+EMAIL_WORKER_DATABASE_URL=${DERIVED_EMAIL_WORKER_URL}
 SESSION_SECRET=${SESSION_SECRET}
 MFA_MASTER_KEY=${MFA_MASTER_KEY}
 SMTP_HOST=${EXISTING_SMTP_HOST}
@@ -149,14 +151,24 @@ chown root:politica-canon /etc/politica-canon/runtime.env
 chmod 0640 /etc/politica-canon/runtime.env
 echo "[+] Archivo /etc/politica-canon/runtime.env configurado de forma atómica con propietario root:politica-canon y modo 0640."
 
-# 7. Instalar unidad de servicio systemd
+# 7. Instalar unidades de servicio systemd (web y outbox worker) (C-02)
 if [ -f /opt/politica-canon/app/deploy/systemd/politica-canon.service ]; then
-    echo "[+] Instalando servicio systemd..."
+    echo "[+] Instalando servicio web systemd..."
     cp /opt/politica-canon/app/deploy/systemd/politica-canon.service /etc/systemd/system/
-    systemctl daemon-reload
-    systemctl enable politica-canon
+fi
+if [ -f /opt/politica-canon/app/deploy/systemd/politica-canon-outbox-worker.service ]; then
+    echo "[+] Instalando servicio worker autónomo de correo outbox systemd..."
+    cp /opt/politica-canon/app/deploy/systemd/politica-canon-outbox-worker.service /etc/systemd/system/
 fi
 
-echo "== [POLÍTICA CANON v0.3.23] Provisión completada exitosamente =="
+systemctl daemon-reload
+if systemctl is-active --quiet politica-canon.service 2>/dev/null || systemctl is-enabled --quiet politica-canon.service 2>/dev/null; then
+    systemctl enable --now politica-canon.service || true
+fi
+if systemctl is-active --quiet politica-canon-outbox-worker.service 2>/dev/null || systemctl is-enabled --quiet politica-canon-outbox-worker.service 2>/dev/null; then
+    systemctl enable --now politica-canon-outbox-worker.service || true
+fi
+
+echo "== [POLÍTICA CANON v0.3.24] Provisión completada exitosamente =="
 
 

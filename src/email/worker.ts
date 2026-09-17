@@ -1,4 +1,4 @@
-import { dbPool } from '../db/client.js';
+import { emailWorkerPool } from '../db/client.js';
 import { processEmailOutbox } from './outbox.js';
 
 let isRunning = true;
@@ -9,7 +9,7 @@ export async function startOutboxWorkerLoop(intervalMs: number = 5000): Promise<
 
   while (isRunning) {
     try {
-      const result = await processEmailOutbox(dbPool, workerId);
+      const result = await processEmailOutbox(emailWorkerPool, workerId);
       if (result.processed > 0 || result.failed > 0) {
         console.log(`[EMAIL WORKER] Lote procesado: ${result.processed} enviados, ${result.failed} fallidos.`);
       }

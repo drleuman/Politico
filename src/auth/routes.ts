@@ -31,7 +31,7 @@ import {
   disableMfa,
 } from './mfa.js';
 import { sendInvitationEmail, sendPasswordResetEmail } from '../email/adapter.js';
-import { enqueueEmail, processEmailOutbox } from '../email/outbox.js';
+import { enqueueEmail } from '../email/outbox.js';
 import { buildResolvedAuthorizationContext } from './roles.js';
 import { recordSecurityAuditEvent } from '../audit/events.js';
 
@@ -140,8 +140,6 @@ export async function registerAuthRoutes(fastify: FastifyInstance) {
 
       await enqueueEmail(client, email, 'INVITATION', { token: result.rawToken, tenantName: 'Política Canon' });
       await client.query('COMMIT');
-
-      processEmailOutbox(pool).catch(err => console.error('[OUTBOX] Async process error:', err));
 
       return reply.status(201).send({
         status: 'created',
@@ -776,8 +774,6 @@ export async function registerAuthRoutes(fastify: FastifyInstance) {
         await enqueueEmail(client, email.trim().toLowerCase(), 'PASSWORD_RESET', { token: rawToken });
       }
       await client.query('COMMIT');
-
-      processEmailOutbox(pool).catch(err => console.error('[OUTBOX] Async process error:', err));
 
       return reply.status(200).send({
         status: 'reset_requested',

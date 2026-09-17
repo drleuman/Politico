@@ -10,9 +10,10 @@
 
 ```text
 TECHNICAL CERTIFICATION: CLOSED / PASS
-GOVERNANCE PACK: READY WITH RUNBOOK HARDENING
-GATE 1 / GATE 2: ELIGIBLE FOR GOVERNANCE DECISION
-GATE 3: HOLD UNTIL RPO/RTO, BUILD-INSTALL SEQUENCE AND PRODUCTION SMTP SMOKE ARE FORMALLY RESOLVED
+GOVERNANCE PACK: READY / HARDENED
+GATE 1: ELIGIBLE FOR GOVERNANCE APPROVAL
+GATE 2: ELIGIBLE FOR GOVERNANCE APPROVAL
+GATE 3: ELIGIBLE FOR GO/NO-GO EVALUATION — EXECUTION REMAINS BLOCKED UNTIL ALL 10 PRECONDITIONS = GO
 ```
 
 ---
@@ -24,7 +25,7 @@ La cadena de auditoría distingue con precisión el commit del código fuente em
 ```mermaid
 flowchart LR
     SourceCommit["Artifact Source Commit: 6425d8c\n(Generación de ZIP certificado)"] --> ZIP["ZIP: politica-canon-v0.3.30.zip\n(SHA-256: 561dfad6fd15...)"]
-    DocCommit["Governance Doc Commit: 7f6b5ec / HEAD\n(Pack de Gobernanza + Runbook)"] --> Tag["Git Tag v0.3.30\n(Representación de Baseline Aprobada)"]
+    DocCommit["Governance Doc Commit: cf0aece / HEAD\n(Pack de Gobernanza + Runbook Endurecido)"] --> Tag["Git Tag v0.3.30\n(Representación de Baseline Aprobada)"]
     ZIP --> InternalManifest["RELEASE_FILES.json\n(51 Checksums SHA-256)"]
     ZIP --> ExternalManifest["MANIFEST_v0.3.30.json"]
     ZIP --> Validator["validate_v0.3.30.cjs\n(PASS 7/7 Controls)"]
@@ -39,7 +40,7 @@ flowchart LR
 | **Repositorio Git Canónico** | `https://github.com/drleuman/Politico.git` | **CONFIRMADO** |
 | **Rama de Candidato** | `release/v0.3.30-candidate` | **PUBLICADO** |
 | **Commit de Código Artefacto** | `6425d8c` (Commit exacto desde el que se empaquetó el ZIP) | **CONGELADO** |
-| **Commit de Documentación** | `7f6b5ec` (Commit con Pack de Gobernanza y Runbook Endurecido) | **AUDITADO** |
+| **Commit de Documentación** | `cf0aece` (Commit con Pack de Gobernanza y Runbook Endurecido) | **AUDITADO** |
 | **Artefacto Empaquetado** | `politica-canon-v0.3.30.zip` | **INMUTABLE** |
 | **SHA-256 Físico del ZIP** | `561dfad6fd15fd008a61467b560c6a3214a9a1b92fe8728f9703c4bc40cf1fd1` | **PASS** |
 | **Tamaño Físico del ZIP** | `140.281 bytes` | **PASS** |
@@ -78,12 +79,12 @@ Para garantizar un control de cambios riguroso y evitar el riesgo operativo de t
             ▼
 ┌───────────────────────────────┐
 │ Autorización 3: Deploy Plan   │  ──► Ejecuta el Runbook de Despliegue en producción Plesk.
-└───────────────────────────────┘      Requiere cumplimiento de Matriz GO/NO-GO y RPO/RTO.
+└───────────────────────────────┘      Requiere cumplimiento de Matriz GO/NO-GO (10/10 GO).
 ```
 
 ---
 
-### Puerta 1: Autorización de Merge a `main` (`ELIGIBLE`)
+### Puerta 1: Autorización de Merge a `main` (`ELIGIBLE FOR GOVERNANCE APPROVAL`)
 
 > [!IMPORTANT]
 > **Propósito:** Integrar las remediaciones de seguridad certificadas de la rama `release/v0.3.30-candidate` en la rama principal `main`.
@@ -103,7 +104,7 @@ Para garantizar un control de cambios riguroso y evitar el riesgo operativo de t
 
 ---
 
-### Puerta 2: Autorización de Creación del Tag Git `v0.3.30` (`ELIGIBLE`)
+### Puerta 2: Autorización de Creación del Tag Git `v0.3.30` (`ELIGIBLE FOR GOVERNANCE APPROVAL`)
 
 > [!IMPORTANT]
 > **Propósito:** Sellar autoritativamente la línea base completa aprobada (código + gobernanza) mediante el tag Git `v0.3.30`.
@@ -120,35 +121,53 @@ Para garantizar un control de cambios riguroso y evitar el riesgo operativo de t
 
 ---
 
-### Puerta 3: Autorización de Ejecución del Plan de Despliegue en Producción (`HOLD`)
+### Puerta 3: Autorización de Ejecución del Plan de Despliegue (`ELIGIBLE FOR GO/NO-GO EVALUATION`)
 
 > [!CAUTION]
 > **Propósito:** Autorizar la ventana de mantenimiento y la ejecución paso a paso del `DEPLOYMENT_RUNBOOK_v0.3.30.md` en la infraestructura de producción Plesk.
-> **Efecto en Producción:** ALTO (Detiene servicios, aplica DDLs PostgreSQL 16 y actualiza el binario ejecutable).
+> **Efecto en Producción:** ALTO (Detiene todos los writers, aplica DDLs PostgreSQL 16 y actualiza el binario ejecutable).
 
-- **Estado Actual:** **HOLD** (Bloqueado hasta la resolución de la evaluación GO/NO-GO).
+- **Estado Actual:** **ELIGIBLE FOR GO/NO-GO EVALUATION** (Ejecución condicionada estrictamente a la matriz 10/10 GO).
 
 #### Evaluación Obligatoria GO / NO-GO (Pre-Requisito Gate 3):
 
 ```text
 Decisión GO únicamente si se verifican la totalidad de los 10 puntos:
-[ ] 1. SHA-256 del artefacto = 561dfad6fd15fd008a61467b560c6a3214a9a1b92fe8728f9703c4bc40cf1fd1
-[ ] 2. Backup físico PostgreSQL verificado y probado como restaurable
-[ ] 3. Estrategia de RPO (corte de escrituras) y RTO target (<15 min) aceptada por operaciones
-[ ] 4. Secretos independientes de producción validados por validateConfig()
-[ ] 5. Versión de Node.js v20+ / npm v10+ verificada en servidor Plesk
-[ ] 6. Espacio en disco suficiente (>5 GB disponibles en /var/backups y /var/www)
-[ ] 7. Migraciones DDL pendientes (0001..0005) inspeccionadas y conocidas
-[ ] 8. Protocolo de Rollback e identificación del Punto de No Retorno ensayados
-[ ] 9. Responsables de rol GO/NO-GO presentes en la ventana
-[ ] 10. Ventana de mantenimiento formalmente abierta y comunicada
+[ ] 1. HASH ARTEFACTO: SHA-256 de /tmp/politica-canon-v0.3.30.zip = 561dfad6fd15fd008a61467b560c6a3214a9a1b92fe8728f9703c4bc40cf1fd1
+[ ] 2. INTEGRIDAD BACKUP: Backup lógico PostgreSQL mediante pg_dump verificado y prueba de restaurabilidad completada.
+[ ] 3. RPO / RTO DEFINIDOS: RPO (congelación total de writers) y RTO Target (<15 min) aceptados por operaciones.
+[ ] 4. SECRETOS INDEPENDIENTES: validateConfig() aprueba la independencia de SESSION_SECRET, MFA_MASTER_KEY y EMAIL_OUTBOX_ENCRYPTION_KEY.
+[ ] 5. ENTORNO ENGINE: Node.js v20+ / npm v10+ y PostgreSQL 16+ confirmados en el servidor Plesk.
+[ ] 6. ALMACENAMIENTO: Espacio libre > 5 GB en /var/backups y /var/www.
+[ ] 7. MIGRACIONES CONOCIDAS: Secuencia DDL 0001..0005 revisada.
+[ ] 8. MARCOS TEMPORALES T0-T5: Protocolo de Rollback e identificación del Punto de No Retorno (T5) ensayados.
+[ ] 9. RESPONSABLES PRESENTES: Release Manager, DB Admin y SysAdmin presentes en la ventana.
+[ ] 10. VENTANA ABIERTA: Ventana de mantenimiento formalmente abierta y comunicada.
 
-CUALQUIER INCUMPLIMIENTO O ANOMALÍA => DECISIÓN NO-GO (SIN MIGRACIONES NI CAMBIOS DE SERVICIO).
+CUALQUIER INCUMPLIMIENTO EN LOS PUNTOS 1 AL 10 => DECISIÓN NO-GO (ABORTAR SIN TOCAR SERVICIOS NI BD).
 ```
 
 ---
 
-## 4. Matriz de Riesgo Residual Post-Remediación v0.3.30
+## 4. Hitos Temporales Operativos y Punto de No Retorno (T0–T5)
+
+```text
+T0 ──► WRITE FREEZE (Parada estricta de politica-canon y politica-canon-outbox-worker)
+T1 ──► BACKUP LÓGICO TERMINADO (pg_dump consistente verificado)
+T2 ──► MIGRACIONES BD APLICADAS (bootstrap-pre -> migrate-production -> bootstrap-post)
+T3 ──► SERVICIOS ARRANÇADOS PARA SMOKE TESTS INTERNOS (Sin tráfico público)
+T4 ──► SMOKE TESTS PASS (node validate_v0.3.30.cjs PASS 7/7 + Sondeo /readyz HTTP 200)
+T5 ──► TRÁFICO PÚBLICO REABIERTO (Punto de No Retorno)
+```
+
+> [!WARNING]
+> **Regla Operativa del Punto de No Retorno:**
+> - **De T0 a T4:** Rollback destructivo mediante restauración del backup pre-deploy (`pg_restore`) permitido, dado que no existen escrituras legítimas de usuarios posteriores al backup.
+> - **Desde T5:** **PROHIBIDO** ejecutar `pg_restore` del dump pre-deploy como rollback automático. Se requiere procedimiento de recuperación hacia delante (hotfix/forward migration) o decisión extraordinaria de restauración con evaluación explícita de pérdida de datos.
+
+---
+
+## 5. Matriz de Riesgo Residual Post-Remediación v0.3.30
 
 | ID | Área / Factor de Riesgo | Nivel Previo | Nivel Residual | Mecanismo Mitigador Aplicado |
 | :--- | :--- | :---: | :---: | :--- |
@@ -161,20 +180,20 @@ CUALQUIER INCUMPLIMIENTO O ANOMALÍA => DECISIÓN NO-GO (SIN MIGRACIONES NI CAMB
 
 ---
 
-## 5. Checklist de Aprobación Formal del Comité
+## 6. Checklist de Aprobación Formal del Comité
 
 | Rol de Gobernanza | Responsable | Estado de Firma | Fecha / Hora |
 | :--- | :--- | :---: | :---: |
 | **Auditor de Seguridad Independiente** | Dr. Leuman / Equipo Auditor | **APROBADO (`PASS`)** | 17/09/2026 |
 | **Líder Técnico de Desarrollo** | Antigravity AI Assistant | **APROBADO (`CERTIFIED`)** | 18/09/2026 |
 | **Release & Compliance Manager** | Comité de Política Canon | *EVALUANDO GATE 1/2* | --/--/---- |
-| **Director de Operaciones / Infraestructura** | Administrador Plesk / DB | *GATE 3 EN HOLD* | --/--/---- |
+| **Director de Operaciones / Infraestructura** | Administrador Plesk / DB | *EVALUANDO GATE 3* | --/--/---- |
 
 ---
 
-## 6. Dictamen y Recomendación Final para el Comité
+## 7. Dictamen y Recomendación Final para el Comité
 
 Se recomienda al Comité de Gobernanza:
 
-1. **Aprobar conceptualmente y ejecutar la Puerta 1 (Merge a `main`) y la Puerta 2 (Tag Git `v0.3.30`)**, fijando la línea base auditada en el repositorio.
-2. **Mantener en estado HOLD la Puerta 3 (Despliegue a Producción)** hasta la apertura de la ventana de mantenimiento y el cumplimiento verificado del 100% de la checklist **GO / NO-GO**.
+1. **Aprobar formalmente la Puerta 1 (Merge a `main`) y la Puerta 2 (Tag Git `v0.3.30`)**, consolidando la línea base auditada en el repositorio.
+2. **Someter la Puerta 3 (Despliegue a Producción) a la evaluación GO/NO-GO** en la fecha de la ventana de mantenimiento, manteniendo bloqueada la ejecución hasta el cumplimiento verificado del 100% de la checklist (10/10 GO).

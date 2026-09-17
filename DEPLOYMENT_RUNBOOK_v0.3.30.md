@@ -26,13 +26,13 @@ Antes de detener servicios o tocar la base de datos de producción, el equipo de
 EVALUACIÓN GO / NO-GO (GATE 3):
 
 [ ] 1. HASH ARTEFACTO: SHA-256 de /tmp/politica-canon-v0.3.30.zip = 561dfad6fd15fd008a61467b560c6a3214a9a1b92fe8728f9703c4bc40cf1fd1
-[ ] 2. INTEGRIDAD BACKUP: Backup físico pg_dump verificado y confirmado como restaurable.
-[ ] 3. RPO / RTO DEFINIDOS: RPO (corte de escrituras) y RTO Target (<15 min) aceptados por operaciones.
+[ ] 2. INTEGRIDAD BACKUP: Backup lógico PostgreSQL mediante pg_dump verificado y prueba de restaurabilidad completada.
+[ ] 3. RPO / RTO DEFINIDOS: RPO (congelación total de writers) y RTO Target (<15 min) aceptados por operaciones.
 [ ] 4. SECRETOS INDEPENDIENTES: validateConfig() aprueba la independencia de SESSION_SECRET, MFA_MASTER_KEY y EMAIL_OUTBOX_ENCRYPTION_KEY.
 [ ] 5. ENTORNO ENGINE: Node.js v20+ / npm v10+ y PostgreSQL 16+ confirmados en el servidor Plesk.
 [ ] 6. ALMACENAMIENTO: Espacio libre > 5 GB en /var/backups y /var/www.
 [ ] 7. MIGRACIONES CONOCIDAS: Secuencia DDL 0001..0005 revisada.
-[ ] 8. PUNTO DE NO RETORNO: Protocolo de Rollback e identificación del Punto de No Retorno entendidos por el equipo.
+[ ] 8. MARCOS TEMPORALES T0-T5: Protocolo de Rollback e identificación del Punto de No Retorno (T5) ensayados.
 [ ] 9. RESPONSABLES PRESENTES: Release Manager, DB Admin y SysAdmin presentes en la ventana.
 [ ] 10. VENTANA ABIERTA: Ventana de mantenimiento formalmente abierta y comunicada.
 
@@ -41,18 +41,38 @@ CUALQUIER INCUMPLIMIENTO EN LOS PUNTOS 1 AL 10 => DECISIÓN NO-GO (ABORTAR SIN T
 
 ---
 
-## 3. Definición Realista de RPO y RTO
+## 3. Definición Realista de RPO, RTO e Hitos temporales (T0–T5)
 
 ### 3.1 Objetivo de Punto de Recuperación (RPO Real)
-- **Definición:** **Backup Consistente Pre-Despliegue con Ventana de Escritura Congelada.**
-- **Mecanismo:** La parada de servicios (`systemctl stop politica-canon`) antes de ejecutar el backup o las migraciones detiene el procesamiento de solicitudes HTTP/API y la ingesta de transacciones en la BD.
-- **Garantía:** Cero pérdida de datos (RPO = 0) respecto a transacciones confirmadas antes del cierre de la ventana de escrituras. Solicitudes entrantes durante el mantenimiento reciben 503 Service Unavailable a nivel de proxy/Nginx.
+- **Definición:** **Backup Lógico Consistente Pre-Despliegue con Congelación Total de Writers.**
+- **Mecanismo:** La parada obligatoria de **todos los procesos de escritura** (`politica-canon.service`, `politica-canon-outbox-worker.service`, cron jobs, maintenance tasks o deployment hooks con acceso a la BD) ANTES de extraer el backup lógico detiene por completo la ingesta de transacciones.
+- **Verificación de Inactividad de Writers:**
+  ```bash
+  sudo systemctl stop politica-canon.service
+  sudo systemctl stop politica-canon-outbox-worker.service
+  
+  sudo systemctl is-active politica-canon.service
+  sudo systemctl is-active politica-canon-outbox-worker.service
+  ```
+  **Resultado exigido:** `inactive` / `inactive`. Durante la ventana de backup/migración no debe ejecutarse ningún cron ni job secundario.
 
-### 3.2 Objetivo de Tiempo de Recuperación (RTO Target)
+### 3.2 Objetivo de Tiempo de Recuperación (RTO Target) y Punto de No Retorno
 - **RTO Objetivo:** **< 15 minutos** (Sujeto a tamaño físico de la base de datos y tiempo de restauración del dump).
-- **Punto de No Retorno (Point of No Return):**
-  > [!CAUTION]
-  > Una vez completados los Smoke Tests de la Fase 5 y restablecido el tráfico público a la aplicación, **el restore del backup `pg_dump` DEJA DE SER UN MECANISMO VÁLIDO DE ROLLBACK**, ya que destruiría transacciones reales creadas por usuarios tras la reapertura. Anomalías posteriores a este punto deberán remediarse mediante hotfix forward-only o desactivación selectiva de funcionalidades.
+- **Secuencia de Hitos Temporales:**
+
+```text
+T0 ──► WRITE FREEZE (Parada estricta de todos los writers)
+T1 ──► BACKUP LÓGICO TERMINADO (pg_dump consistente verificado)
+T2 ──► MIGRACIONES BD APLICADAS (bootstrap-pre -> migrate-production -> bootstrap-post)
+T3 ──► SERVICIOS ARRANÇADOS PARA SMOKE TESTS INTERNOS (Sin tráfico público)
+T4 ──► SMOKE TESTS PASS (node validate_v0.3.30.cjs PASS 7/7 + Sondeo /readyz HTTP 200)
+T5 ──► TRÁFICO PÚBLICO REABIERTO (Punto de No Retorno)
+```
+
+> [!CAUTION]
+> **Regla Operativa del Punto de No Retorno (T5):**
+> - **De T0 a T4:** Rollback destructivo mediante restauración del backup pre-deploy (`pg_restore`) permitido, dado que no existen escrituras legítimas de usuarios posteriores al backup.
+> - **Desde T5 (Tráfico Público Reabierto):** **PROHIBIDO** ejecutar `pg_restore` del dump pre-deploy como rollback automático, ya que destruiría transacciones reales creadas por usuarios tras la reapertura. Anomalías posteriores a T5 deberán remediarse mediante hotfix forward-only o desactivación selectiva de funcionalidades.
 
 ---
 
@@ -93,18 +113,21 @@ APP_BASE_URL=https://politica.canon
 
 ---
 
-## 5. Fase 1: Respaldos de Seguridad y Consistencia
+## 5. Fase 1: Respaldos de Seguridad y Consistencia (T0 → T1)
 
-### 5.1 Parada Inicial de Servicios (Congelación de Escrituras)
-Detenga los servicios antes de extraer el backup para garantizar consistencia absoluta:
+### 5.1 Parada Total de Escritores (Hito T0 — Write Freeze)
+Detenga todos los servicios y confirme que no existen procesos secundarios escribiendo en la BD:
 
 ```bash
 sudo systemctl stop politica-canon-outbox-worker.service
 sudo systemctl stop politica-canon.service
-```
 
-### 5.2 Backup Físico de Base de Datos PostgreSQL 16
-Como usuario `postgres` o administrador DB:
+sudo systemctl is-active politica-canon.service politica-canon-outbox-worker.service
+```
+**Estado verificado exigido:** `inactive` / `inactive`.
+
+### 5.2 Backup Lógico de Base de Datos PostgreSQL 16 (Hito T1)
+Como usuario `postgres` o administrador DB, ejecute el respaldo lógico completo:
 
 ```bash
 pg_dump -h 127.0.0.1 -U postgres -d politica_canon -F c -b -v -f /var/backups/politica_canon_pre_v0.3.30.dump
@@ -130,27 +153,33 @@ rm -rf dist/ RELEASE_FILES.json validate_*.cjs scripts/ db/ deploy/
 unzip -o /tmp/politica-canon-v0.3.30.zip
 ```
 
-### 6.2 Instalación de Dependencias y Secuencia de Build
+### 6.2 Instalación de Dependencias y Guardarraíl del directorio `dist/`
 
-El artefacto `politica-canon-v0.3.30.zip` **ya contiene el directorio pre-compilado `dist/` en su interior**. Por ello, el procedimiento primario recomendado en producción evita requerir herramientas de compilación (`devDependencies`) durante la instalación:
+El artefacto `politica-canon-v0.3.30.zip` **ya contiene el directorio pre-compilado `dist/` en su interior**.
 
 #### OPCIÓN A (Recomendada — Uso de `dist/` pre-compilado en el ZIP):
 ```bash
 npm ci --omit=dev
 ```
-*No requiere ejecutar `npm run build` pues el paquete certificado incluye `dist/`.*
 
 #### OPCIÓN B (Alternativa — Recompilación explícita en servidor):
-Si por política interna se exige recompilar el TypeScript en el servidor de destino:
 ```bash
 npm ci
 npm run build
 npm prune --omit=dev
 ```
 
+#### Guardarraíl Obligatorio Pre-Arranque:
+Antes de continuar a las migraciones o al arranque de servicios, verifique la existencia física e integridad de los artefactos compilados en `dist/`:
+
+```bash
+test -f dist/server.js || { echo "ERROR: dist/server.js ausente"; exit 1; }
+test -f dist/email/crypto-payload.js || { echo "ERROR: dist/email/crypto-payload.js ausente"; exit 1; }
+```
+
 ---
 
-## 7. Fase 3: Ejecución de Migraciones y Bootstrap de Seguridad PG16
+## 7. Fase 3: Ejecución de Migraciones y Bootstrap PG16 (Hito T2)
 
 Ejecute la secuencia estricta de 3 fases DDL/DML de producción:
 
@@ -174,21 +203,21 @@ node scripts/bootstrap-post.mjs
 
 ---
 
-## 8. Fase 4: Verificación In-Situ y Arranque de Servicios
+## 8. Fase 4: Verificación In-Situ y Arranque de Servicios (Hitos T3 → T4)
 
-### 8.1 Ejecución del Validador Autónomo en Producción
+### 8.1 Ejecución del Validador Autónomo en Producción (Guardarraíl Estricto)
 ```bash
 node validate_v0.3.30.cjs
 ```
 **Resultado exigido:** `PASS (7/7 CONTROLES SUPERADOS)` con exit code 0.
 
-### 8.2 Arranque de Servicios Systemd
+### 8.2 Arranque de Servicios Systemd (Hito T3)
 ```bash
 sudo systemctl start politica-canon.service
 sudo systemctl start politica-canon-outbox-worker.service
 ```
 
-### 8.3 Verificación de Sondeo HTTP `/readyz`
+### 8.3 Verificación de Sondeo HTTP `/readyz` (Hito T4)
 ```bash
 curl -f http://127.0.0.1:3000/readyz
 ```
@@ -204,7 +233,7 @@ curl -f http://127.0.0.1:3000/readyz
 
 ---
 
-## 9. Fase 5: Smoke Tests de Producción (Transporte SMTP Real vs. Mailpit)
+## 9. Fase 5: Smoke Tests de Producción y Apertura de Tráfico (T4 → T5)
 
 > [!NOTE]
 > **Diferenciación de Entornos de Transporte:**
@@ -215,22 +244,24 @@ curl -f http://127.0.0.1:3000/readyz
 El endpoint `/readyz` invoca automáticamente `verifyEmailTransport()`, el cual ejecuta `transporter.verify()` contra el servidor SMTP de producción. Un resultado `"smtp": "connected"` en `/readyz` confirma la autenticación y conectividad TLS/STARTTLS sin enviar mensajes a usuarios.
 
 ### 9.2 Prueba Controlada de Encolado y Procesamiento SMTP
-Si se requiere probar la transmisión de un correo de prueba:
 1. Encole un mensaje de prueba hacia una dirección interna de control (ej. `smtp-smoke-test@politica.canon`).
 2. Verifique en los logs del worker (`journalctl -u politica-canon-outbox-worker.service -n 50`) que el mensaje fue transmitido exitosamente y que `payload.token` fue redactado a `[REDACTED]`.
 
+### 9.3 Reapertura de Tráfico Público (Hito T5 — Punto de No Retorno)
+Una vez validados los smoke tests con resultado PASS, restablezca la configuración de Nginx / Plesk para permitir el acceso público externo.
+
 ---
 
-## 10. Fase 6: Protocolo de Rollback Inmediato (Pre-Punto de No Retorno)
+## 10. Fase 6: Protocolo de Rollback Inmediato (De T0 a T4)
 
-Si durante las Fases 3, 4 o 5 se detecta una falla crítica **antes de declarar la reapertura pública de tráfico**:
+Si durante las Fases 3, 4 o 5 se detecta una falla crítica **antes del Hito T5 (Apertura de Tráfico Público)**:
 
 ### 10.1 Parada Inmediata de Servicios
 ```bash
 sudo systemctl stop politica-canon-outbox-worker.service politica-canon.service
 ```
 
-### 10.2 Restitución de Base de Datos desde Backup Físico
+### 10.2 Restitución de Base de Datos desde Backup Lógico
 ```bash
 dropdb -h 127.0.0.1 -U postgres politica_canon
 createdb -h 127.0.0.1 -U postgres politica_canon

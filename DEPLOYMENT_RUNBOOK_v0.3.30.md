@@ -55,6 +55,7 @@ CUALQUIER INCUMPLIMIENTO EN LOS PUNTOS 1 AL 10 => DECISIÓN NO-GO (ABORTAR SIN T
   sudo systemctl is-active politica-canon-outbox-worker.service
   ```
   **Resultado exigido:** `inactive` / `inactive`. Durante la ventana de backup/migración no debe ejecutarse ningún cron ni job secundario.
+- **Garantía RPO:** **RPO 0 respecto al punto de corte T0, bajo congelación verificada de todos los writers.** Solicitudes entrantes durante la ventana reciben respuesta HTTP 503 a nivel de proxy/Nginx.
 
 ### 3.2 Objetivo de Tiempo de Recuperación (RTO Target) y Punto de No Retorno
 - **RTO Objetivo:** **< 15 minutos** (Sujeto a tamaño físico de la base de datos y tiempo de restauración del dump).
@@ -64,7 +65,7 @@ CUALQUIER INCUMPLIMIENTO EN LOS PUNTOS 1 AL 10 => DECISIÓN NO-GO (ABORTAR SIN T
 T0 ──► WRITE FREEZE (Parada estricta de todos los writers)
 T1 ──► BACKUP LÓGICO TERMINADO (pg_dump consistente verificado)
 T2 ──► MIGRACIONES BD APLICADAS (bootstrap-pre -> migrate-production -> bootstrap-post)
-T3 ──► SERVICIOS ARRANÇADOS PARA SMOKE TESTS INTERNOS (Sin tráfico público)
+T3 ──► SERVICIOS ARRANCADOS PARA SMOKE TESTS INTERNOS (Sin tráfico público)
 T4 ──► SMOKE TESTS PASS (node validate_v0.3.30.cjs PASS 7/7 + Sondeo /readyz HTTP 200)
 T5 ──► TRÁFICO PÚBLICO REABIERTO (Punto de No Retorno)
 ```

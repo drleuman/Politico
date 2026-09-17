@@ -155,7 +155,7 @@ CUALQUIER INCUMPLIMIENTO EN LOS PUNTOS 1 AL 10 => DECISIÓN NO-GO (ABORTAR SIN T
 T0 ──► WRITE FREEZE (Parada estricta de politica-canon y politica-canon-outbox-worker)
 T1 ──► BACKUP LÓGICO TERMINADO (pg_dump consistente verificado)
 T2 ──► MIGRACIONES BD APLICADAS (bootstrap-pre -> migrate-production -> bootstrap-post)
-T3 ──► SERVICIOS ARRANÇADOS PARA SMOKE TESTS INTERNOS (Sin tráfico público)
+T3 ──► SERVICIOS ARRANCADOS PARA SMOKE TESTS INTERNOS (Sin tráfico público)
 T4 ──► SMOKE TESTS PASS (node validate_v0.3.30.cjs PASS 7/7 + Sondeo /readyz HTTP 200)
 T5 ──► TRÁFICO PÚBLICO REABIERTO (Punto de No Retorno)
 ```

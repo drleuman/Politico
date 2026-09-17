@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# Script de Provisión Inicial de Servidor — Política Canon v0.3.26
+# Script de Provisión Inicial de Servidor — Política Canon v0.3.27
 # Ejecutar en el servidor Ubuntu 24.04 / Plesk como root o con sudo
 
 set -euo pipefail
 
-echo "== [POLÍTICA CANON v0.3.26] Provisión Inicial de Servidor =="
+echo "== [POLÍTICA CANON v0.3.27] Provisión Inicial de Servidor =="
 
 # 1. Crear usuario del sistema sin shell interactiva y asociar pertenencia de grupo postgres (B-02)
 if ! id -u politica-canon >/dev/null 2>&1; then
@@ -61,7 +61,7 @@ if [ -z "${DERIVED_DB_URL}" ]; then
     exit 1
 fi
 
-# 5. Generar/Preservar secreto independiente para el worker y asignar contraseña PostgreSQL (C-01, C-02)
+# 5. Generar/Preservar secreto independiente para el worker y asignar contraseña PostgreSQL (C-01, C-02, H-03)
 EXISTING_WORKER_PASS=""
 if [ -f /etc/politica-canon/runtime.env ]; then
     EXISTING_WORKER_PASS=$(grep -E '^POLITICA_CANON_WORKER_DB_PASS=' /etc/politica-canon/runtime.env | cut -d'=' -f2- || true)
@@ -72,28 +72,38 @@ fi
 
 if [ -n "${EXISTING_WORKER_PASS}" ]; then
     WORKER_DB_PASS="${EXISTING_WORKER_PASS}"
-    echo "[+] Preservando secrecto existente de politica_canon_email_worker."
+    echo "[+] Preservando secreto existente de politica_canon_email_worker."
 else
     WORKER_DB_PASS=$(openssl rand -hex 24 || head -c 48 /dev/urandom | xxd -p | tr -d '\n')
     echo "[+] Generada nueva contraseña independiente para politica_canon_email_worker."
 fi
 
-# Asignar la contraseña al rol politica_canon_email_worker en PostgreSQL como superusuario postgres (C-01, C-02 Fail-Closed)
-if command -v psql >/dev/null 2>&1; then
-    echo "[+] Verificando y asignando contraseña a rol PostgreSQL 'politica_canon_email_worker'..."
-    su - postgres -c "psql -d politica_canon -c \"
-    DO \\\$\$
-    BEGIN
-        IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'politica_canon_email_worker') THEN
-            CREATE ROLE politica_canon_email_worker WITH LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS CONNECTION LIMIT 5;
-        END IF;
-    END \\\$\$;
-    ALTER ROLE politica_canon_email_worker WITH PASSWORD '${WORKER_DB_PASS}';
-    \""
-    echo "[+] Autenticación del worker configurada. Verificando conexión a BD..."
-    PGPASSWORD="${WORKER_DB_PASS}" psql -h 127.0.0.1 -U politica_canon_email_worker -d politica_canon -c "SELECT current_user;" >/dev/null
-    echo "[+] Conexión de 'politica_canon_email_worker' verificada exitosamente."
+# H-03: Exigir psql y validar formato hexadecimal seguro del secreto antes de interactuar con la BD
+if ! command -v psql >/dev/null 2>&1; then
+    echo "❌ ERROR FATAL: El comando psql no está disponible en PATH. Se requiere PostgreSQL client en el servidor."
+    exit 1
 fi
+
+if ! [[ "${WORKER_DB_PASS}" =~ ^[a-f0-9]{32,64}$ ]]; then
+    echo "❌ ERROR FATAL: WORKER_DB_PASS no cumple el formato hexadecimal requerido (32-64 caracteres a-f0-9)."
+    exit 1
+fi
+
+# H-03: Asignar contraseña pasando SQL mediante stdin (sin exponer el secreto en argumentos de comando ps/argv)
+echo "[+] Verificando y asignando contraseña a rol PostgreSQL 'politica_canon_email_worker'..."
+su - postgres -c "psql -d politica_canon" <<SQL_EOF >/dev/null
+DO \$\$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'politica_canon_email_worker') THEN
+        CREATE ROLE politica_canon_email_worker WITH LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS CONNECTION LIMIT 5;
+    END IF;
+END \$\$;
+ALTER ROLE politica_canon_email_worker WITH PASSWORD '${WORKER_DB_PASS}';
+SQL_EOF
+
+echo "[+] Autenticación del worker configurada. Verificando conexión a BD..."
+PGPASSWORD="${WORKER_DB_PASS}" psql -h 127.0.0.1 -U politica_canon_email_worker -d politica_canon -c "SELECT current_user;" >/dev/null
+echo "[+] Conexión de 'politica_canon_email_worker' verificada exitosamente."
 
 # Construir URL explícita del worker con su secreto independiente
 DERIVED_EMAIL_WORKER_URL="postgresql://politica_canon_email_worker:${WORKER_DB_PASS}@127.0.0.1:5432/politica_canon"
@@ -102,6 +112,7 @@ DERIVED_EMAIL_WORKER_URL="postgresql://politica_canon_email_worker:${WORKER_DB_P
 EXISTING_SESSION_SECRET=""
 EXISTING_MFA_KEY=""
 EXISTING_OUTBOX_KEY=""
+EXISTING_LEGACY_KEY=""
 EXISTING_SMTP_HOST=""
 EXISTING_SMTP_PORT=""
 EXISTING_SMTP_USER=""
@@ -113,6 +124,7 @@ if [ -f /etc/politica-canon/runtime.env ]; then
     EXISTING_SESSION_SECRET=$(grep -E '^SESSION_SECRET=' /etc/politica-canon/runtime.env | cut -d'=' -f2- || true)
     EXISTING_MFA_KEY=$(grep -E '^MFA_MASTER_KEY=' /etc/politica-canon/runtime.env | cut -d'=' -f2- || true)
     EXISTING_OUTBOX_KEY=$(grep -E '^EMAIL_OUTBOX_ENCRYPTION_KEY=' /etc/politica-canon/runtime.env | cut -d'=' -f2- || true)
+    EXISTING_LEGACY_KEY=$(grep -E '^EMAIL_OUTBOX_LEGACY_KEY_V0=' /etc/politica-canon/runtime.env | cut -d'=' -f2- || true)
     EXISTING_SMTP_HOST=$(grep -E '^SMTP_HOST=' /etc/politica-canon/runtime.env | cut -d'=' -f2- || true)
     EXISTING_SMTP_PORT=$(grep -E '^SMTP_PORT=' /etc/politica-canon/runtime.env | cut -d'=' -f2- || true)
     EXISTING_SMTP_USER=$(grep -E '^SMTP_USER=' /etc/politica-canon/runtime.env | cut -d'=' -f2- || true)
@@ -128,6 +140,7 @@ fi
 if [ -f /root/politica-canon/runtime.env ]; then
     [ -z "${EXISTING_MFA_KEY}" ] && EXISTING_MFA_KEY=$(grep -E '^MFA_MASTER_KEY=' /root/politica-canon/runtime.env | cut -d'=' -f2- || true)
     [ -z "${EXISTING_OUTBOX_KEY}" ] && EXISTING_OUTBOX_KEY=$(grep -E '^EMAIL_OUTBOX_ENCRYPTION_KEY=' /root/politica-canon/runtime.env | cut -d'=' -f2- || true)
+    [ -z "${EXISTING_LEGACY_KEY}" ] && EXISTING_LEGACY_KEY=$(grep -E '^EMAIL_OUTBOX_LEGACY_KEY_V0=' /root/politica-canon/runtime.env | cut -d'=' -f2- || true)
     [ -z "${EXISTING_SMTP_HOST}" ] && EXISTING_SMTP_HOST=$(grep -E '^SMTP_HOST=' /root/politica-canon/runtime.env | cut -d'=' -f2- || true)
     [ -z "${EXISTING_SMTP_PORT}" ] && EXISTING_SMTP_PORT=$(grep -E '^SMTP_PORT=' /root/politica-canon/runtime.env | cut -d'=' -f2- || true)
     [ -z "${EXISTING_SMTP_USER}" ] && EXISTING_SMTP_USER=$(grep -E '^SMTP_USER=' /root/politica-canon/runtime.env | cut -d'=' -f2- || true)
@@ -152,13 +165,15 @@ else
     echo "[+] Generada nueva MFA_MASTER_KEY independiente de 32 bytes (64 hex)."
 fi
 
-if [ -n "${EXISTING_OUTBOX_KEY}" ] && [ "${#EXISTING_OUTBOX_KEY}" -ge 32 ]; then
+if [ -n "${EXISTING_OUTBOX_KEY}" ] && [ "${#EXISTING_OUTBOX_KEY}" -ge 32 ] && [ "${EXISTING_OUTBOX_KEY}" != "${SESSION_SECRET}" ] && [ "${EXISTING_OUTBOX_KEY}" != "${MFA_MASTER_KEY}" ]; then
     EMAIL_OUTBOX_ENCRYPTION_KEY="${EXISTING_OUTBOX_KEY}"
-    echo "[+] Preservando EMAIL_OUTBOX_ENCRYPTION_KEY existente válida."
+    echo "[+] Preservando EMAIL_OUTBOX_ENCRYPTION_KEY existente válida e independiente."
 else
     EMAIL_OUTBOX_ENCRYPTION_KEY=$(openssl rand -hex 32 || head -c 64 /dev/urandom | xxd -p | tr -d '\n')
-    echo "[+] Generada nueva EMAIL_OUTBOX_ENCRYPTION_KEY de 32 bytes (64 hex)."
+    echo "[+] Generada nueva EMAIL_OUTBOX_ENCRYPTION_KEY independiente de 32 bytes (64 hex)."
 fi
+
+EMAIL_OUTBOX_LEGACY_KEY_V0="${EXISTING_LEGACY_KEY:-${MFA_MASTER_KEY}}"
 
 # 7. Escribir /etc/politica-canon/runtime.env.tmp de forma atómica y restrictiva con umask 0077
 TMP_ENV="/etc/politica-canon/runtime.env.tmp"
@@ -167,7 +182,7 @@ TMP_ENV="/etc/politica-canon/runtime.env.tmp"
     touch "${TMP_ENV}"
     chmod 0640 "${TMP_ENV}"
     cat <<EOF > "${TMP_ENV}"
-# Configuración de tiempo de ejecución Política Canon v0.3.26
+# Configuración de tiempo de ejecución Política Canon v0.3.27
 NODE_ENV=production
 PORT=3000
 HOST=127.0.0.1
@@ -179,6 +194,7 @@ POLITICA_CANON_WORKER_DB_PASS=${WORKER_DB_PASS}
 SESSION_SECRET=${SESSION_SECRET}
 MFA_MASTER_KEY=${MFA_MASTER_KEY}
 EMAIL_OUTBOX_ENCRYPTION_KEY=${EMAIL_OUTBOX_ENCRYPTION_KEY}
+EMAIL_OUTBOX_LEGACY_KEY_V0=${EMAIL_OUTBOX_LEGACY_KEY_V0}
 SMTP_HOST=${EXISTING_SMTP_HOST}
 SMTP_PORT=${EXISTING_SMTP_PORT:-587}
 SMTP_USER=${EXISTING_SMTP_USER}
@@ -200,7 +216,7 @@ chown root:politica-canon /etc/politica-canon/runtime.env
 chmod 0640 /etc/politica-canon/runtime.env
 echo "[+] Archivo /etc/politica-canon/runtime.env configurado de forma atómica con propietario root:politica-canon y modo 0640."
 
-# 8. Instalar e Iniciar Unidades de Servicio Systemd (C-04 Incondicional y Fail-Closed)
+# 8. Instalar e Iniciar Unidades de Servicio Systemd (C-02 Secuenciación Fail-Closed)
 if [ -f /opt/politica-canon/app/deploy/systemd/politica-canon.service ]; then
     echo "[+] Instalando servicio web systemd..."
     cp /opt/politica-canon/app/deploy/systemd/politica-canon.service /etc/systemd/system/
@@ -217,21 +233,32 @@ else
     exit 1
 fi
 
-echo "[+] Recargando unidades systemd y habilitando servicios..."
+echo "[+] Recargando unidades systemd y registrando habilitación (enable)..."
 systemctl daemon-reload
-systemctl enable --now politica-canon.service
-systemctl enable --now politica-canon-outbox-worker.service
+systemctl enable politica-canon.service
+systemctl enable politica-canon-outbox-worker.service
 
-# Verificación Fail-Closed de Estado Activo
-if ! systemctl is-active --quiet politica-canon.service; then
-    echo "❌ ERROR FATAL: politica-canon.service no se encuentra en estado activo tras la provisión."
-    exit 1
+# C-02: Comprobar si las migraciones de base de datos han sido aplicadas antes de iniciar los servicios
+HAS_OUTBOX=$(PGPASSWORD="${WORKER_DB_PASS}" psql -h 127.0.0.1 -U politica_canon_email_worker -d politica_canon -tAc "SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'email_outbox';" 2>/dev/null || true)
+
+if [ "${HAS_OUTBOX}" = "1" ]; then
+    echo "[+] Esquema de base de datos e historia de migraciones verificados. Iniciando servicios..."
+    systemctl start politica-canon.service
+    systemctl start politica-canon-outbox-worker.service
+
+    # Verificación Fail-Closed de Estado Activo
+    if ! systemctl is-active --quiet politica-canon.service; then
+        echo "❌ ERROR FATAL: politica-canon.service no se encuentra en estado activo tras la provisión."
+        exit 1
+    fi
+
+    if ! systemctl is-active --quiet politica-canon-outbox-worker.service; then
+        echo "❌ ERROR FATAL: politica-canon-outbox-worker.service no se encuentra en estado activo tras la provisión."
+        exit 1
+    fi
+    echo "[+] Servicios systemd verificados y activos."
+else
+    echo "ℹ️ [DESPLIEGUE INICIAL / SECUENCIACIÓN C-02] La tabla 'email_outbox' no existe aún en la base de datos. Unidades systemd registradas y habilitadas (enable). Ejecutar ahora: 'npm run bootstrap:pre && npm run migrate:prod && npm run bootstrap:post' y posteriormente 'systemctl start politica-canon.service politica-canon-outbox-worker.service'."
 fi
 
-if ! systemctl is-active --quiet politica-canon-outbox-worker.service; then
-    echo "❌ ERROR FATAL: politica-canon-outbox-worker.service no se encuentra en estado activo tras la provisión."
-    exit 1
-fi
-
-echo "== [POLÍTICA CANON v0.3.26] Provisión completada exitosamente =="
-
+echo "== [POLÍTICA CANON v0.3.27] Provisión completada exitosamente =="

@@ -15,6 +15,7 @@ export interface AppConfig {
   sessionSecret: string;
   mfaMasterKey: string;
   emailOutboxEncryptionKey: string;
+  emailOutboxLegacyKeyV0?: string;
   smtpHost?: string;
   smtpPort?: number;
   smtpUser?: string;
@@ -33,8 +34,9 @@ function validateConfig(): AppConfig {
   const emailWorkerDatabaseUrl = process.env.EMAIL_WORKER_DATABASE_URL;
   const redisUrl = process.env.REDIS_URL;
   const sessionSecret = process.env.SESSION_SECRET;
-  const mfaMasterKey = process.env.MFA_MASTER_KEY || process.env.SESSION_SECRET; // Fallback to sessionSecret for dev if not set, but validate length
+  const mfaMasterKey = process.env.MFA_MASTER_KEY || process.env.SESSION_SECRET; // Fallback for dev if not set
   const emailOutboxEncryptionKey = process.env.EMAIL_OUTBOX_ENCRYPTION_KEY || process.env.MFA_MASTER_KEY || process.env.SESSION_SECRET;
+  const emailOutboxLegacyKeyV0 = process.env.EMAIL_OUTBOX_LEGACY_KEY_V0 || process.env.MFA_MASTER_KEY;
 
   const smtpHost = process.env.SMTP_HOST;
   const smtpPort = process.env.SMTP_PORT ? parseInt(process.env.SMTP_PORT, 10) : undefined;
@@ -76,9 +78,20 @@ function validateConfig(): AppConfig {
     process.exit(1);
   }
 
-  if (sessionSecret && effectiveMfaMasterKey && sessionSecret === effectiveMfaMasterKey && nodeEnv !== 'test') {
-    console.error('[FATAL] Configuration validation failed closed. MFA_MASTER_KEY must be cryptographically independent and cannot equal SESSION_SECRET.');
-    process.exit(1);
+  // H-02: Independencia criptográfica obligatoria en producción
+  if (nodeEnv === 'production') {
+    if (sessionSecret === effectiveMfaMasterKey) {
+      console.error('[FATAL] Configuration validation failed closed. MFA_MASTER_KEY must be cryptographically independent and cannot equal SESSION_SECRET.');
+      process.exit(1);
+    }
+    if (sessionSecret === effectiveOutboxKey) {
+      console.error('[FATAL] Configuration validation failed closed. EMAIL_OUTBOX_ENCRYPTION_KEY must be cryptographically independent and cannot equal SESSION_SECRET.');
+      process.exit(1);
+    }
+    if (effectiveMfaMasterKey === effectiveOutboxKey) {
+      console.error('[FATAL] Configuration validation failed closed. EMAIL_OUTBOX_ENCRYPTION_KEY must be cryptographically independent and cannot equal MFA_MASTER_KEY.');
+      process.exit(1);
+    }
   }
 
   return {
@@ -92,6 +105,7 @@ function validateConfig(): AppConfig {
     sessionSecret: sessionSecret!,
     mfaMasterKey: effectiveMfaMasterKey,
     emailOutboxEncryptionKey: effectiveOutboxKey,
+    emailOutboxLegacyKeyV0: emailOutboxLegacyKeyV0 || undefined,
     smtpHost,
     smtpPort,
     smtpUser,

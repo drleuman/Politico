@@ -31,6 +31,7 @@ import {
   disableMfa,
 } from './mfa.js';
 import { sendInvitationEmail, sendPasswordResetEmail } from '../email/adapter.js';
+import { enqueueEmail, processEmailOutbox } from '../email/outbox.js';
 import { buildResolvedAuthorizationContext } from './roles.js';
 import { recordSecurityAuditEvent } from '../audit/events.js';
 
@@ -137,8 +138,10 @@ export async function registerAuthRoutes(fastify: FastifyInstance) {
         expiresInHours,
       });
 
-      await sendInvitationEmail(email, result.rawToken, 'Política Canon');
+      await enqueueEmail(client, email, 'INVITATION', { token: result.rawToken, tenantName: 'Política Canon' });
       await client.query('COMMIT');
+
+      processEmailOutbox(pool).catch(err => console.error('[OUTBOX] Async process error:', err));
 
       return reply.status(201).send({
         status: 'created',
@@ -682,11 +685,13 @@ export async function registerAuthRoutes(fastify: FastifyInstance) {
         return reply.status(403).send({ error: 'SELF_DEACTIVATION_FORBIDDEN: No puede desactivar su propia membresía.' });
       }
 
-      const targetRole = targetCheck.rows[0].role;
+      const targetRoles = targetCheck.rows.map(r => r.role).filter(Boolean);
       const actorIsAdmin = authContext.roles.includes('ADMIN');
-      if (!actorIsAdmin && targetRole === 'ADMIN') {
+      const targetHasAdminRole = targetRoles.includes('ADMIN');
+
+      if (!actorIsAdmin && targetHasAdminRole) {
         await client.query('ROLLBACK');
-        return reply.status(403).send({ error: 'HIERARCHY_VIOLATION: Un COORDINATOR no puede modificar la membresía de un ADMIN.' });
+        return reply.status(403).send({ error: 'HIERARCHY_VIOLATION: Un COORDINATOR no puede modificar la membresía de un usuario que posee rol ADMIN.' });
       }
 
       // C-02: Modificar únicamente la membresía del tenant usando columnas existentes (sin updated_at)
@@ -740,7 +745,10 @@ export async function registerAuthRoutes(fastify: FastifyInstance) {
       const userRes = await client.query(`SELECT id FROM users WHERE email = $1 AND is_active = TRUE`, [email.trim().toLowerCase()]);
       if (userRes.rows.length > 0) {
         const userId = userRes.rows[0].id;
-        const orgRes = await client.query(`SELECT organization_id FROM organization_memberships WHERE user_id = $1 LIMIT 1`, [userId]);
+        const orgRes = await client.query<{ organization_id: string }>(
+          `SELECT organization_id FROM get_user_active_memberships($1) LIMIT 1`,
+          [userId]
+        );
         const organizationId = orgRes.rows.length > 0 ? orgRes.rows[0].organization_id : null;
 
         if (organizationId) {
@@ -765,9 +773,11 @@ export async function registerAuthRoutes(fastify: FastifyInstance) {
           });
         }
 
-        await sendPasswordResetEmail(email.trim().toLowerCase(), rawToken);
+        await enqueueEmail(client, email.trim().toLowerCase(), 'PASSWORD_RESET', { token: rawToken });
       }
       await client.query('COMMIT');
+
+      processEmailOutbox(pool).catch(err => console.error('[OUTBOX] Async process error:', err));
 
       return reply.status(200).send({
         status: 'reset_requested',
@@ -813,16 +823,27 @@ export async function registerAuthRoutes(fastify: FastifyInstance) {
       }
 
       const { id: resetId, user_id: userId } = resetRes.rows[0];
+
+      // C-01: Resolver la organización con la función SECURITY DEFINER y fijar GUC antes de revocar sesiones y auditar
+      const orgRes = await client.query<{ organization_id: string }>(
+        `SELECT organization_id FROM get_user_active_memberships($1) LIMIT 1`,
+        [userId]
+      );
+      const organizationId = orgRes.rows.length > 0 ? orgRes.rows[0].organization_id : null;
+
+      if (organizationId) {
+        await client.query("SELECT set_config('app.current_organization_id', $1, true)", [organizationId]);
+      }
+
       const newHash = await hashPassword(newPassword);
 
       await client.query(`UPDATE user_credentials SET password_hash = $1, updated_at = NOW() WHERE user_id = $2`, [newHash, userId]);
       await client.query(`UPDATE password_reset_tokens SET consumed_at = NOW() WHERE id = $1`, [resetId]);
       await revokeAllUserSessions(client, userId);
 
-      const orgRes = await client.query(`SELECT organization_id FROM organization_memberships WHERE user_id = $1 LIMIT 1`, [userId]);
-      if (orgRes.rows.length > 0) {
+      if (organizationId) {
         await recordSecurityAuditEvent(client, {
-          organizationId: orgRes.rows[0].organization_id,
+          organizationId,
           actorId: userId,
           eventType: 'PASSWORD_RESET_COMPLETED',
           payload: { userId },

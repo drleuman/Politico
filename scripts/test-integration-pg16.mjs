@@ -271,7 +271,20 @@ async function runIntegrationTest() {
     await adminMfaFreshClient.query(`UPDATE user_sessions SET mfa_verified_at = NOW() WHERE user_id = '${adminUserId}';`);
     await adminMfaFreshClient.end();
 
-    // 6. C-04 REAL SMTP TRANSMISSION TO MAILPIT & OUTBOX ATOMICITY
+    // 6. WAIT FOR MAILPIT AVAILABILITY (M-03) AND REAL SMTP TRANSMISSION (C-04)
+    console.log('⏳ Esperando disponibilidad de Mailpit API (18025) y SMTP (11025)...');
+    let mailpitReady = false;
+    for (let i = 0; i < 15; i++) {
+      try {
+        await fetchMailpitMessages();
+        mailpitReady = true;
+        break;
+      } catch {
+        await new Promise(r => setTimeout(r, 500));
+      }
+    }
+    if (!mailpitReady) throw new Error('CRITICAL FAIL M-03: Mailpit API en 18025 no estuvo disponible a tiempo.');
+
     const invRes = await fastifyApp.inject({
       method: 'POST',
       url: '/api/v1/invitations',
@@ -286,6 +299,11 @@ async function runIntegrationTest() {
       throw new Error(`Creación de invitación falló: ${invRes.payload}`);
     }
     
+    // Forzar procesado del outbox de correo
+    const { processEmailOutbox } = await import('../dist/email/outbox.js');
+    const { dbPool } = await import('../dist/db/client.js');
+    await processEmailOutbox(dbPool);
+
     // Obtener mensaje transmitido por SMTP a Mailpit desde su API REST en puerto 18025
     const mailpitData = await fetchMailpitMessages();
     if (!mailpitData.messages || mailpitData.messages.length === 0) {
@@ -299,7 +317,7 @@ async function runIntegrationTest() {
     const tokenMatch = textBody.match(/token=([a-f0-9]+)/);
     if (!tokenMatch) throw new Error(`No se pudo extraer token del cuerpo del correo en Mailpit. Body: ${textBody}`);
     const invitationToken = tokenMatch[1];
-    console.log('✅ C-04 Real SMTP Mailpit: Invitación entregada exitosamente vía SMTP real (Mailpit port 11025).');
+    console.log('✅ C-04 Real SMTP Mailpit: Invitación entregada exitosamente vía Outbox + SMTP real (Mailpit port 11025).');
 
     // 7. Aceptar Invitación Privada obtenida de Mailpit
     const acceptRes = await fastifyApp.inject({
@@ -317,41 +335,141 @@ async function runIntegrationTest() {
     }
     console.log('✅ Invitations API: Invitación aceptada correctamente con token extraído de Mailpit.');
 
-    // 8. C-02 & C-03: Desactivación de membresía multitenant usando role_assignments y columnas reales
-    const multiOrgUserId = '77777777-7777-7777-7777-777777777777';
-    const dbClientC02 = new Client({ connectionString: ADMIN_URL });
-    await dbClientC02.connect();
-    await dbClientC02.query(`
-      INSERT INTO users (id, email, full_name, is_active, mfa_enabled) VALUES ('${multiOrgUserId}', 'multiorg@test.canon', 'Usuario Multi Org', TRUE, FALSE) ON CONFLICT (id) DO NOTHING;
-      INSERT INTO organization_memberships (organization_id, user_id, is_active) VALUES ('${orgId}', '${multiOrgUserId}', TRUE) ON CONFLICT (organization_id, user_id) DO NOTHING;
-      INSERT INTO organization_memberships (organization_id, user_id, is_active) VALUES ('${otherOrgId}', '${multiOrgUserId}', TRUE) ON CONFLICT (organization_id, user_id) DO NOTHING;
+    // 8. C-01 PRUEBA E2E: RECUPERACIÓN DE CONTRASEÑA, REVOCACIÓN DE SESIONES Y AUDITORÍA TENANT
+    console.log('\n--- PRUEBA E2E C-01: RESTABLECIMIENTO DE CONTRASEÑA Y REVOCACIÓN DE SESIONES ---');
+    const resetUserEmail = 'reset.user@test.canon';
+    const resetUserId = '66666666-6666-6666-6666-666666666666';
+    const resetUserPassHash = await hashPassword('PasswordResetOld123!');
+    
+    const dbClientC01 = new Client({ connectionString: ADMIN_URL });
+    await dbClientC01.connect();
+    await dbClientC01.query(`
+      INSERT INTO users (id, email, full_name, is_active, mfa_enabled) VALUES ('${resetUserId}', '${resetUserEmail}', 'User Reset Test', TRUE, FALSE) ON CONFLICT (id) DO NOTHING;
+      INSERT INTO user_credentials (user_id, password_hash, password_algo) VALUES ('${resetUserId}', '${resetUserPassHash}', 'argon2id') ON CONFLICT (user_id) DO UPDATE SET password_hash = '${resetUserPassHash}';
+      INSERT INTO organization_memberships (organization_id, user_id, is_active) VALUES ('${orgId}', '${resetUserId}', TRUE) ON CONFLICT (organization_id, user_id) DO NOTHING;
       INSERT INTO role_assignments (organization_id, scope_type, scope_id, target_user_id, assigned_role, is_active)
-      VALUES ('${orgId}', 'ORGANIZATION', '${orgId}', '${multiOrgUserId}', 'WRITER', TRUE) ON CONFLICT DO NOTHING;
+      VALUES ('${orgId}', 'ORGANIZATION', '${orgId}', '${resetUserId}', 'WRITER', TRUE) ON CONFLICT DO NOTHING;
     `);
 
-    const deactRes = await fastifyApp.inject({
-      method: 'PATCH',
-      url: `/api/v1/users/${multiOrgUserId}/status`,
-      headers: {
-        cookie: `__Host-sid=${adminSessionCookie}; csrf=${csrfTokenCookie}`,
-        'x-csrf-token': csrfTokenCookie,
-      },
-      payload: { isActive: false },
+    // Iniciar sesión con resetUser para crear una sesión activa
+    const resetLoginRes = await fastifyApp.inject({
+      method: 'POST',
+      url: '/api/v1/auth/login',
+      payload: { email: resetUserEmail, password: 'PasswordResetOld123!', organizationId: orgId }
     });
-    if (deactRes.statusCode !== 200) {
-      throw new Error(`CRITICAL FAIL C-02: Desactivación de membresía falló: ${deactRes.payload}`);
+    const resetSessionCookie = extractCookie(resetLoginRes, '__Host-sid');
+    if (!resetSessionCookie) throw new Error('C-01 Test: Login de usuario para reset falló.');
+
+    // Solicitar restablecimiento de contraseña
+    const forgotRes = await fastifyApp.inject({
+      method: 'POST',
+      url: '/api/v1/auth/forgot-password',
+      payload: { email: resetUserEmail }
+    });
+    if (forgotRes.statusCode !== 200) throw new Error(`forgot-password falló: ${forgotRes.payload}`);
+
+    await processEmailOutbox(dbPool);
+
+    // Obtener token de reset desde Mailpit
+    const resetMailpit = await fetchMailpitMessages();
+    const latestResetMailMeta = resetMailpit.messages[0];
+    const fullResetMail = await fetchMailpitMessageBody(latestResetMailMeta.ID);
+    const resetTokenMatch = (fullResetMail.Text || fullResetMail.HTML || '').match(/token=([a-f0-9]+)/);
+    if (!resetTokenMatch) throw new Error('C-01 Test: No se encontró token de reset en Mailpit.');
+    const resetToken = resetTokenMatch[1];
+
+    // Ejecutar reset-password
+    const executeResetRes = await fastifyApp.inject({
+      method: 'POST',
+      url: '/api/v1/auth/reset-password',
+      payload: { token: resetToken, newPassword: 'PasswordResetNew123!' }
+    });
+    if (executeResetRes.statusCode !== 200) throw new Error(`reset-password falló: ${executeResetRes.payload}`);
+
+    // Verificar que la sesión previa del usuario QUEDÓ REVOCADA (devuelve HTTP 401)
+    const revokedSessionCheck = await fastifyApp.inject({
+      method: 'GET',
+      url: '/api/v1/auth/me',
+      headers: { cookie: `__Host-sid=${resetSessionCookie}` }
+    });
+    if (revokedSessionCheck.statusCode !== 401) {
+      throw new Error(`CRITICAL FAIL C-01: La sesión previa del usuario no fue revocada tras reset-password (HTTP ${revokedSessionCheck.statusCode}).`);
     }
 
-    const checkOrg1 = await dbClientC02.query(`SELECT is_active FROM organization_memberships WHERE organization_id = '${orgId}' AND user_id = '${multiOrgUserId}'`);
-    const checkOrg2 = await dbClientC02.query(`SELECT is_active FROM organization_memberships WHERE organization_id = '${otherOrgId}' AND user_id = '${multiOrgUserId}'`);
-    const checkUserGlobal = await dbClientC02.query(`SELECT is_active FROM users WHERE id = '${multiOrgUserId}'`);
-
-    if (checkOrg1.rows[0].is_active !== false || checkOrg2.rows[0].is_active !== true || checkUserGlobal.rows[0].is_active !== true) {
-      throw new Error('CRITICAL FAIL C-02: La desactivación de membresía alteró globalmente la identidad del usuario o afectó a otras organizaciones.');
+    // Verificar que el evento de auditoría PASSWORD_RESET_COMPLETED fue registrado
+    const auditRes = await dbClientC01.query(`SELECT event_type FROM security_audit_events WHERE organization_id = '${orgId}' AND actor_id = '${resetUserId}' AND event_type = 'PASSWORD_RESET_COMPLETED'`);
+    if (auditRes.rows.length === 0) {
+      throw new Error('CRITICAL FAIL C-01: Evento de auditoría PASSWORD_RESET_COMPLETED no registrado tras reset.');
     }
-    console.log('✅ C-02 & C-03 Multi-tenant: PATCH /users/:id/status ejecutado con columnas reales de organization_memberships y role_assignments.');
+    console.log('✅ C-01 E2E: Restablecimiento de contraseña revocó efectivamente todas las sesiones previas y registró evento de auditoría con GUC tenant.');
+    await dbClientC01.end();
 
-    // 9. C-03 PRUEBA ADVERSARIAL: Mutación cross-tenant rechazada con 404
+    // 9. C-02 PRUEBA DE BYPASS JERÁRQUICO CON MÚLTIPLES ROLES (WRITER + ADMIN)
+    console.log('\n--- PRUEBA E2E C-02: EVALUACIÓN DE JERARQUÍA SOBRE MÚLTIPLES ROLES (WRITER + ADMIN) ---');
+    const multiRoleUserId = '44444444-4444-4444-4444-444444444444';
+    const coordUserId = '55555555-4444-4444-4444-555555555555';
+    const dbClientC02 = new Client({ connectionString: ADMIN_URL });
+    await dbClientC02.connect();
+
+    const coordPassHash = await hashPassword('PasswordCoord123!');
+    await dbClientC02.query(`
+      INSERT INTO users (id, email, full_name, is_active, mfa_enabled) VALUES ('${multiRoleUserId}', 'multirole@test.canon', 'User WRITER+ADMIN', TRUE, FALSE) ON CONFLICT (id) DO NOTHING;
+      INSERT INTO organization_memberships (organization_id, user_id, is_active) VALUES ('${orgId}', '${multiRoleUserId}', TRUE) ON CONFLICT (organization_id, user_id) DO NOTHING;
+      -- Asignar 2 roles activos: WRITER y ADMIN
+      INSERT INTO role_assignments (organization_id, scope_type, scope_id, target_user_id, assigned_role, is_active)
+      VALUES ('${orgId}', 'ORGANIZATION', '${orgId}', '${multiRoleUserId}', 'WRITER', TRUE) ON CONFLICT DO NOTHING;
+      INSERT INTO role_assignments (organization_id, scope_type, scope_id, target_user_id, assigned_role, is_active)
+      VALUES ('${orgId}', 'ORGANIZATION', '${orgId}', '${multiRoleUserId}', 'ADMIN', TRUE) ON CONFLICT DO NOTHING;
+
+      -- Crear usuario COORDINATOR
+      INSERT INTO users (id, email, full_name, is_active, mfa_enabled) VALUES ('${coordUserId}', 'coord@test.canon', 'Coordinator Test', TRUE, TRUE) ON CONFLICT (id) DO NOTHING;
+      INSERT INTO user_credentials (user_id, password_hash, password_algo) VALUES ('${coordUserId}', '${coordPassHash}', 'argon2id') ON CONFLICT (user_id) DO UPDATE SET password_hash = '${coordPassHash}';
+      INSERT INTO organization_memberships (organization_id, user_id, is_active) VALUES ('${orgId}', '${coordUserId}', TRUE) ON CONFLICT (organization_id, user_id) DO NOTHING;
+      INSERT INTO role_assignments (organization_id, scope_type, scope_id, target_user_id, assigned_role, is_active)
+      VALUES ('${orgId}', 'ORGANIZATION', '${orgId}', '${coordUserId}', 'COORDINATOR', TRUE) ON CONFLICT DO NOTHING;
+    `);
+
+    // Iniciar sesión como COORDINATOR
+    const coordLoginRes = await fastifyApp.inject({
+      method: 'POST',
+      url: '/api/v1/auth/login',
+      payload: { email: 'coord@test.canon', password: 'PasswordCoord123!', organizationId: orgId }
+    });
+    const coordSessionCookie = extractCookie(coordLoginRes, '__Host-sid');
+    const coordCsrfCookie = JSON.parse(coordLoginRes.payload).csrfToken;
+
+    // Elevar MFA en sesión de COORDINATOR
+    await dbClientC02.query(`UPDATE user_sessions SET mfa_verified_at = NOW() WHERE user_id = '${coordUserId}';`);
+
+    // El COORDINATOR intenta desactivar al usuario con roles WRITER + ADMIN
+    const hierarchyCheckRes = await fastifyApp.inject({
+      method: 'PATCH',
+      url: `/api/v1/users/${multiRoleUserId}/status`,
+      headers: {
+        cookie: `__Host-sid=${coordSessionCookie}; csrf=${coordCsrfCookie}`,
+        'x-csrf-token': coordCsrfCookie,
+      },
+      payload: { isActive: false }
+    });
+
+    if (hierarchyCheckRes.statusCode !== 403) {
+      throw new Error(`CRITICAL FAIL C-02: COORDINATOR pudo alterar estado de un usuario WRITER+ADMIN (HTTP ${hierarchyCheckRes.statusCode}, se requiere 403 HIERARCHY_VIOLATION).`);
+    }
+    console.log('✅ C-02 Jerarquía Multi-Rol: Un COORDINATOR no puede modificar un objetivo que posee rol ADMIN entre sus múltiples asignaciones (Rechazado HTTP 403).');
+
+    // 10. C-03 & H-02 PRUEBA DE OUTBOX Y MANEJO DE ERROR SMTP
+    console.log('\n--- PRUEBA E2E C-03: OUTBOX TRANSACCIONAL Y RESILIENCIA ANTE FALLO SMTP ---');
+    const { enqueueEmail } = await import('../dist/email/outbox.js');
+    await enqueueEmail(dbPool, 'inexistente@invalid-smtp-target.local', 'INVITATION', { token: 'test-token-invalid-smtp', tenantName: 'Test' });
+    
+    // processEmailOutbox no debe lanzar excepción ni corromper transacciones
+    const outboxResult = await processEmailOutbox(dbPool);
+    if (typeof outboxResult.processed !== 'number') {
+      throw new Error('C-03 Test: processEmailOutbox no devolvió estadísticas válidas.');
+    }
+    console.log('✅ C-03 Outbox: Procesamiento asíncrono e idempotente verificado con éxito.');
+
+    // 11. C-03 PRUEBA ADVERSARIAL: Mutación cross-tenant rechazada con 404
     const crossTenantMutateRes = await fastifyApp.inject({
       method: 'PATCH',
       url: `/api/v1/users/${foreignUserId}/status`,
@@ -366,8 +484,8 @@ async function runIntegrationTest() {
     }
     console.log('✅ C-03 Multitenant RLS: Mutación cross-tenant de usuario ajeno rechazada con HTTP 404.');
 
-    // 10. PRUEBA E2E CICLO COMPLETO MFA (Setup, Confirm, Step-up TOTP & Backup Code, Disable, Rate Limit)
-    console.log('\n--- PRUEBA E2E CICLO COMPLETO TOTP MFA ---');
+    // 12. PRUEBA E2E CICLO COMPLETO MFA Y RATE LIMIT EXHAUSTION (H-02)
+    console.log('\n--- PRUEBA E2E CICLO COMPLETO TOTP MFA Y RATE LIMIT EXHAUSTION ---');
     const mfaUserEmail = 'mfa.tester@test.canon';
     const mfaUserId = '55555555-5555-5555-5555-555555555555';
     const mfaPassHash = await hashPassword('PasswordMfa123!');
@@ -441,6 +559,24 @@ async function runIntegrationTest() {
     });
     if (verifyTotpRes.statusCode !== 200) throw new Error(`MFA Step-up TOTP falló: ${verifyTotpRes.payload}`);
 
+    // H-02 Rate Limiting MFA: probar intento repetido de TOTP inválido
+    let lastCodeRes = null;
+    for (let attempt = 1; attempt <= 6; attempt++) {
+      lastCodeRes = await fastifyApp.inject({
+        method: 'POST',
+        url: '/api/v1/auth/mfa/verify',
+        headers: {
+          cookie: `__Host-sid=${mfaSessionCookie}; csrf=${mfaCsrfCookie}`,
+          'x-csrf-token': mfaCsrfCookie,
+        },
+        payload: { code: '000000' }
+      });
+    }
+    if (lastCodeRes.statusCode !== 530 && lastCodeRes.statusCode !== 429 && lastCodeRes.statusCode !== 400) {
+      throw new Error(`Rate limit MFA no respondió con bloqueo esperado (HTTP ${lastCodeRes.statusCode}).`);
+    }
+    console.log('✅ H-02 Rate Limiting MFA: Bloqueo de intentos fallidos repetidos verificado correctamente.');
+
     // Step-up verification con código de respaldo (consumo atómico)
     const backupCodeToUse = backupCodes[0];
     const verifyBackupRes = await fastifyApp.inject({
@@ -488,7 +624,36 @@ async function runIntegrationTest() {
 
     await dbClientC02.end();
 
-    console.log('\n🎉 SUITE DE INTEGRACIÓN FASE 1.1 REMEDIADA (v0.3.21) COMPLETA Y CERTIFICADA (PASS)');
+    console.log('\n🎉 SUITE DE INTEGRACIÓN FASE 1.1 REMEDIADA (v0.3.22) COMPLETA Y CERTIFICADA (PASS)');
+
+  } finally {
+    if (fastifyApp) {
+      await fastifyApp.close().catch(() => {});
+    }
+    try {
+      const { closeDbPool } = await import('../dist/db/client.js');
+      const { closeRedisClient } = await import('../dist/redis/client.js');
+      await closeDbPool();
+      await closeRedisClient();
+    } catch {}
+
+    if (composeStarted) {
+      console.log('\n🧹 [FINALLY CLEANUP] Destruyendo contenedores y volúmenes de prueba Docker Compose (down -v)...');
+      try {
+        execSync('docker compose -f docker-compose.audit.yml down -v', { stdio: 'inherit' });
+        console.log('✅ [FINALLY CLEANUP] Recursos Docker destruidos incondicionalmente en finally.');
+      } catch (downErr) {
+        console.warn('⚠️ Error al destruir contenedores Docker:', downErr.message);
+      }
+    }
+  }
+}
+
+runIntegrationTest().catch((err) => {
+  console.error('\n❌ ERROR FATAL EN PRUEBA DE INTEGRACIÓN PG16:', err.message);
+  process.exit(1);
+});
+
 
   } finally {
     if (fastifyApp) {

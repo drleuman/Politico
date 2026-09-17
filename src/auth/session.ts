@@ -219,8 +219,20 @@ export async function revokeSession(client: PoolClient, rawToken: string): Promi
 
 /**
  * Revoca todas las sesiones activas de un usuario (e.g. tras cambiar contraseña o restablecimiento)
+ * C-01: Usa la función SECURITY DEFINER revoke_all_user_sessions_sec para revocar todas las sesiones independientemente de RLS
  */
 export async function revokeAllUserSessions(client: PoolClient, userId: string): Promise<number> {
+  try {
+    const secRes = await client.query<{ revoke_all_user_sessions_sec: number }>(
+      `SELECT revoke_all_user_sessions_sec($1)`,
+      [userId]
+    );
+    if (secRes.rows.length > 0 && typeof secRes.rows[0].revoke_all_user_sessions_sec === 'number') {
+      return secRes.rows[0].revoke_all_user_sessions_sec;
+    }
+  } catch (_e) {
+    // Fallback a UPDATE directo
+  }
   const res = await client.query(`UPDATE user_sessions SET revoked_at = NOW() WHERE user_id = $1 AND revoked_at IS NULL`, [userId]);
   return res.rowCount ?? 0;
 }

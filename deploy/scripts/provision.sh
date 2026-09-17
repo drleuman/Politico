@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# Script de Provisión Inicial de Servidor — Política Canon v0.3.21
+# Script de Provisión Inicial de Servidor — Política Canon v0.3.22
 # Ejecutar en el servidor Ubuntu 24.04 / Plesk como root o con sudo
 
 set -euo pipefail
 
-echo "== [POLÍTICA CANON v0.3.21] Provisión Inicial de Servidor =="
+echo "== [POLÍTICA CANON v0.3.22] Provisión Inicial de Servidor =="
 
 # 1. Crear usuario del sistema sin shell interactiva y asociar pertenencia de grupo postgres (B-02)
 if ! id -u politica-canon >/dev/null 2>&1; then
@@ -157,6 +157,6 @@ if [ -f /opt/politica-canon/app/deploy/systemd/politica-canon.service ]; then
     systemctl enable politica-canon
 fi
 
-echo "== [POLÍTICA CANON v0.3.21] Provisión completada exitosamente =="
+echo "== [POLÍTICA CANON v0.3.22] Provisión completada exitosamente =="
 
 

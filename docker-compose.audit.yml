@@ -27,3 +27,12 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
+
+  mailpit_audit:
+    image: axllent/mailpit:latest
+    container_name: politica_canon_mailpit_audit
+    ports:
+      - "${SMTP_PORT:-11025}:1025"
+      - "${MAILPIT_UI_PORT:-18025}:8025"
+    environment:
+      MP_MAX_MESSAGES: 5000

@@ -44,73 +44,81 @@ export async function createSession(
 ): Promise<{ session: UserSession; rawToken: string; rawCsrfToken: string }> {
   const { userId, organizationId, ipAddress, userAgent, mfaVerified } = params;
 
-  // Límite de sesiones activas: si excede el máximo, revocar la sesión inactiva más antigua
-  const activeSessions = await client.query(
-    `SELECT id FROM user_sessions 
-     WHERE user_id = $1 AND revoked_at IS NULL AND absolute_expires_at > NOW()
-     ORDER BY created_at ASC`,
-    [userId]
-  );
+  await client.query('BEGIN');
+  try {
+    // Límite de sesiones activas: si excede el máximo, revocar la sesión inactiva más antigua
+    const activeSessions = await client.query(
+      `SELECT id FROM user_sessions 
+       WHERE user_id = $1 AND revoked_at IS NULL AND absolute_expires_at > NOW()
+       ORDER BY created_at ASC`,
+      [userId]
+    );
 
-  if (activeSessions.rows.length >= MAX_ACTIVE_SESSIONS_PER_USER) {
-    const toRevokeCount = activeSessions.rows.length - MAX_ACTIVE_SESSIONS_PER_USER + 1;
-    for (let i = 0; i < toRevokeCount; i++) {
-      await client.query(
-        `UPDATE user_sessions SET revoked_at = NOW() WHERE id = $1`,
-        [activeSessions.rows[i].id]
-      );
+    if (activeSessions.rows.length >= MAX_ACTIVE_SESSIONS_PER_USER) {
+      const toRevokeCount = activeSessions.rows.length - MAX_ACTIVE_SESSIONS_PER_USER + 1;
+      for (let i = 0; i < toRevokeCount; i++) {
+        await client.query(
+          `UPDATE user_sessions SET revoked_at = NOW() WHERE id = $1`,
+          [activeSessions.rows[i].id]
+        );
+      }
     }
+
+    const rawToken = generateHighEntropyToken(32);
+    const sidHash = hashToken(rawToken);
+
+    const rawCsrfToken = generateHighEntropyToken(32);
+    const antiCsrfTokenHash = hashToken(rawCsrfToken);
+
+    const now = new Date();
+    const idleExpiresAt = new Date(now.getTime() + IDLE_TIMEOUT_MINUTES * 60 * 1000);
+    const absoluteExpiresAt = new Date(now.getTime() + ABSOLUTE_TIMEOUT_HOURS * 60 * 60 * 1000);
+    const mfaVerifiedAt = mfaVerified ? now.toISOString() : null;
+
+    await client.query("SELECT set_config('app.current_organization_id', $1, true)", [organizationId]);
+
+    const res = await client.query(
+      `INSERT INTO user_sessions (
+        organization_id, user_id, sid_hash, anti_csrf_token_hash,
+        ip_address, user_agent, idle_expires_at, absolute_expires_at, mfa_verified_at
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+      RETURNING id, organization_id, user_id, sid_hash, anti_csrf_token_hash, ip_address, user_agent, created_at, idle_expires_at, absolute_expires_at, revoked_at, mfa_verified_at`,
+      [
+        organizationId,
+        userId,
+        sidHash,
+        antiCsrfTokenHash,
+        ipAddress,
+        userAgent,
+        idleExpiresAt.toISOString(),
+        absoluteExpiresAt.toISOString(),
+        mfaVerifiedAt,
+      ]
+    );
+
+    await client.query('COMMIT');
+
+    const row = res.rows[0];
+    const session: UserSession = {
+      id: row.id,
+      organizationId: row.organization_id,
+      userId: row.user_id,
+      sidHash: row.sid_hash,
+      antiCsrfTokenHash: row.anti_csrf_token_hash,
+      ipAddress: row.ip_address,
+      userAgent: row.user_agent,
+      createdAt: row.created_at,
+      idleExpiresAt: row.idle_expires_at,
+      absoluteExpiresAt: row.absolute_expires_at,
+      revokedAt: row.revoked_at,
+      mfaVerifiedAt: row.mfa_verified_at,
+    };
+
+    return { session, rawToken, rawCsrfToken };
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => {});
+    throw err;
   }
-
-  const rawToken = generateHighEntropyToken(32);
-  const sidHash = hashToken(rawToken);
-
-  const rawCsrfToken = generateHighEntropyToken(32);
-  const antiCsrfTokenHash = hashToken(rawCsrfToken);
-
-  const now = new Date();
-  const idleExpiresAt = new Date(now.getTime() + IDLE_TIMEOUT_MINUTES * 60 * 1000);
-  const absoluteExpiresAt = new Date(now.getTime() + ABSOLUTE_TIMEOUT_HOURS * 60 * 60 * 1000);
-  const mfaVerifiedAt = mfaVerified ? now.toISOString() : null;
-
-  await client.query("SELECT set_config('app.current_organization_id', $1, true)", [organizationId]);
-
-  const res = await client.query(
-    `INSERT INTO user_sessions (
-      organization_id, user_id, sid_hash, anti_csrf_token_hash,
-      ip_address, user_agent, idle_expires_at, absolute_expires_at, mfa_verified_at
-    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-    RETURNING id, organization_id, user_id, sid_hash, anti_csrf_token_hash, ip_address, user_agent, created_at, idle_expires_at, absolute_expires_at, revoked_at, mfa_verified_at`,
-    [
-      organizationId,
-      userId,
-      sidHash,
-      antiCsrfTokenHash,
-      ipAddress,
-      userAgent,
-      idleExpiresAt.toISOString(),
-      absoluteExpiresAt.toISOString(),
-      mfaVerifiedAt,
-    ]
-  );
-
-  const row = res.rows[0];
-  const session: UserSession = {
-    id: row.id,
-    organizationId: row.organization_id,
-    userId: row.user_id,
-    sidHash: row.sid_hash,
-    antiCsrfTokenHash: row.anti_csrf_token_hash,
-    ipAddress: row.ip_address,
-    userAgent: row.user_agent,
-    createdAt: row.created_at,
-    idleExpiresAt: row.idle_expires_at,
-    absoluteExpiresAt: row.absolute_expires_at,
-    revokedAt: row.revoked_at,
-    mfaVerifiedAt: row.mfa_verified_at,
-  };
-
-  return { session, rawToken, rawCsrfToken };
 }
 
 /**
@@ -124,62 +132,71 @@ export async function validateSession(
 
   const sidHash = hashToken(rawToken);
 
-  const res = await client.query(
-    `SELECT * FROM resolve_session_by_token($1)`,
-    [sidHash]
-  );
+  await client.query('BEGIN');
+  try {
+    const res = await client.query(
+      `SELECT * FROM resolve_session_by_token($1)`,
+      [sidHash]
+    );
 
-  if (res.rows.length === 0) {
-    return { session: null, user: null };
+    if (res.rows.length === 0) {
+      await client.query('COMMIT');
+      return { session: null, user: null };
+    }
+
+    const row = res.rows[0];
+
+    // Configurar la variable de sesión RLS app.current_organization_id dentro de la transacción activa
+    await client.query("SELECT set_config('app.current_organization_id', $1, true)", [row.organization_id]);
+
+    // Comprobar bloqueo o inactividad del usuario
+    if (!row.is_active || (row.locked_until && new Date(row.locked_until) > new Date())) {
+      await client.query('COMMIT');
+      return { session: null, user: null };
+    }
+
+    // Renovar vencimiento por inactividad (idle timeout)
+    const now = new Date();
+    const newIdle = new Date(now.getTime() + IDLE_TIMEOUT_MINUTES * 60 * 1000);
+    const absExpires = new Date(row.absolute_expires_at);
+    const finalIdle = newIdle < absExpires ? newIdle : absExpires;
+
+    await client.query(
+      `UPDATE user_sessions SET idle_expires_at = $1 WHERE id = $2`,
+      [finalIdle.toISOString(), row.session_id]
+    );
+
+    await client.query('COMMIT');
+
+    const session: UserSession = {
+      id: row.session_id,
+      organizationId: row.organization_id,
+      userId: row.user_id,
+      sidHash: sidHash,
+      antiCsrfTokenHash: row.anti_csrf_token_hash,
+      ipAddress: row.ip_address,
+      userAgent: row.user_agent,
+      createdAt: row.created_at,
+      idleExpiresAt: finalIdle.toISOString(),
+      absoluteExpiresAt: row.absolute_expires_at,
+      revokedAt: row.revoked_at,
+      mfaVerifiedAt: row.mfa_verified_at,
+    };
+
+    const user: UserProfile = {
+      id: row.user_id,
+      email: row.email,
+      fullName: row.full_name,
+      isActive: row.is_active,
+      mfaEnabled: row.mfa_enabled,
+      createdAt: row.user_created_at,
+    };
+
+    return { session, user };
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => {});
+    throw err;
   }
-
-  const row = res.rows[0];
-
-  // Configurar la variable de sesión RLS app.current_organization_id para las operaciones subsecuentes
-  await client.query("SELECT set_config('app.current_organization_id', $1, true)", [row.organization_id]);
-
-  // Comprobar bloqueo o inactividad del usuario
-  if (!row.is_active) return { session: null, user: null };
-  if (row.locked_until && new Date(row.locked_until) > new Date()) {
-    return { session: null, user: null };
-  }
-
-  // Renovar vencimiento por inactividad (idle timeout)
-  const now = new Date();
-  const newIdle = new Date(now.getTime() + IDLE_TIMEOUT_MINUTES * 60 * 1000);
-  const absExpires = new Date(row.absolute_expires_at);
-  const finalIdle = newIdle < absExpires ? newIdle : absExpires;
-
-  await client.query(
-    `UPDATE user_sessions SET idle_expires_at = $1 WHERE id = $2`,
-    [finalIdle.toISOString(), row.session_id]
-  );
-
-  const session: UserSession = {
-    id: row.session_id,
-    organizationId: row.organization_id,
-    userId: row.user_id,
-    sidHash: sidHash,
-    antiCsrfTokenHash: row.anti_csrf_token_hash,
-    ipAddress: row.ip_address,
-    userAgent: row.user_agent,
-    createdAt: row.created_at,
-    idleExpiresAt: finalIdle.toISOString(),
-    absoluteExpiresAt: row.absolute_expires_at,
-    revokedAt: row.revoked_at,
-    mfaVerifiedAt: row.mfa_verified_at,
-  };
-
-  const user: UserProfile = {
-    id: row.user_id,
-    email: row.email,
-    fullName: row.full_name,
-    isActive: row.is_active,
-    mfaEnabled: row.mfa_enabled,
-    createdAt: row.user_created_at,
-  };
-
-  return { session, user };
 }
 
 /**

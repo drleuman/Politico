@@ -2,7 +2,7 @@ import { execSync } from 'child_process';
 import pg from 'pg';
 const { Client } = pg;
 
-console.log('=== RUNNER DE INTEGRACIÓN REAL POSTGRESQL 16 & REDIS (v0.3.19 ADVERSARIAL REMEDIATED) ===\n');
+console.log('=== RUNNER DE INTEGRACIÓN REAL POSTGRESQL 16, REDIS 7 & MAILPIT SMTP (v0.3.20 CERTIFICADO) ===\n');
 
 const ADMIN_URL = process.env.POLITICA_CANON_ADMIN_DATABASE_URL || 'postgresql://postgres:audit_dev_only_secret_do_not_use_in_prod@127.0.0.1:15432/politica_canon';
 const MIGRATION_URL = process.env.MIGRATION_DATABASE_URL || ADMIN_URL;

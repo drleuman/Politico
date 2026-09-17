@@ -104,18 +104,22 @@ else
     echo "[+] Generado nuevo SESSION_SECRET de 32 bytes (64 hex)."
 fi
 
-if [ -n "${EXISTING_MFA_KEY}" ] && [ "${#EXISTING_MFA_KEY}" -ge 32 ]; then
+if [ -n "${EXISTING_MFA_KEY}" ] && [ "${#EXISTING_MFA_KEY}" -ge 32 ] && [ "${EXISTING_MFA_KEY}" != "${SESSION_SECRET}" ]; then
     MFA_MASTER_KEY="${EXISTING_MFA_KEY}"
-    echo "[+] Preservando MFA_MASTER_KEY existente válida."
+    echo "[+] Preservando MFA_MASTER_KEY existente válida e independiente."
 else
     MFA_MASTER_KEY=$(openssl rand -hex 32 || head -c 64 /dev/urandom | xxd -p | tr -d '\n')
-    echo "[+] Generada nueva MFA_MASTER_KEY de 32 bytes (64 hex)."
+    echo "[+] Generada nueva MFA_MASTER_KEY independiente de 32 bytes (64 hex)."
 fi
 
-# 6. Escribir /etc/politica-canon/runtime.env.tmp de forma atómica y segura
+# 6. Escribir /etc/politica-canon/runtime.env.tmp de forma atómica y restrictiva con umask 0077
 TMP_ENV="/etc/politica-canon/runtime.env.tmp"
-cat <<EOF > "${TMP_ENV}"
-# Configuración de tiempo de ejecución Política Canon v0.3.19
+(
+    umask 0077
+    touch "${TMP_ENV}"
+    chmod 0640 "${TMP_ENV}"
+    cat <<EOF > "${TMP_ENV}"
+# Configuración de tiempo de ejecución Política Canon v0.3.20
 NODE_ENV=production
 PORT=3000
 HOST=127.0.0.1
@@ -131,6 +135,7 @@ SMTP_PASS=${EXISTING_SMTP_PASS}
 SMTP_FROM=${EXISTING_SMTP_FROM}
 SMTP_SECURE=${EXISTING_SMTP_SECURE:-false}
 EOF
+)
 
 # Validar contenido obligatorio antes de reemplazar
 if ! grep -q "^SESSION_SECRET=" "${TMP_ENV}" || ! grep -q "^MFA_MASTER_KEY=" "${TMP_ENV}" || ! grep -q "^DATABASE_URL=" "${TMP_ENV}"; then

@@ -73,35 +73,27 @@ export async function createInvitation(
  * Lista las invitaciones activas de una organización
  */
 export async function listInvitations(client: PoolClient, organizationId: string): Promise<Omit<Invitation, 'tokenHash'>[]> {
-  await client.query('BEGIN');
-  try {
-    await client.query("SELECT set_config('app.current_organization_id', $1, true)", [organizationId]);
+  await client.query("SELECT set_config('app.current_organization_id', $1, true)", [organizationId]);
 
-    const res = await client.query(
-      `SELECT id, organization_id, workspace_id, email, role, invited_by, expires_at, consumed_at, created_at
-       FROM invitations
-       WHERE organization_id = $1 AND consumed_at IS NULL AND expires_at > NOW()
-       ORDER BY created_at DESC`,
-      [organizationId]
-    );
+  const res = await client.query(
+    `SELECT id, organization_id, workspace_id, email, role, invited_by, expires_at, consumed_at, created_at
+     FROM invitations
+     WHERE organization_id = $1 AND consumed_at IS NULL AND expires_at > NOW()
+     ORDER BY created_at DESC`,
+    [organizationId]
+  );
 
-    await client.query('COMMIT');
-
-    return res.rows.map(r => ({
-      id: r.id,
-      organizationId: r.organization_id,
-      workspaceId: r.workspace_id,
-      email: r.email,
-      role: r.role as UserRole,
-      invitedBy: r.invited_by,
-      expiresAt: r.expires_at,
-      consumedAt: r.consumed_at,
-      createdAt: r.created_at,
-    }));
-  } catch (err) {
-    await client.query('ROLLBACK').catch(() => {});
-    throw err;
-  }
+  return res.rows.map(r => ({
+    id: r.id,
+    organizationId: r.organization_id,
+    workspaceId: r.workspace_id,
+    email: r.email,
+    role: r.role as UserRole,
+    invitedBy: r.invited_by,
+    expiresAt: r.expires_at,
+    consumedAt: r.consumed_at,
+    createdAt: r.created_at,
+  }));
 }
 
 /**
@@ -113,40 +105,32 @@ export async function revokeInvitation(
 ): Promise<boolean> {
   const { invitationId, organizationId, revokedBy } = params;
 
-  await client.query('BEGIN');
-  try {
-    await client.query("SELECT set_config('app.current_organization_id', $1, true)", [organizationId]);
+  await client.query("SELECT set_config('app.current_organization_id', $1, true)", [organizationId]);
 
-    const res = await client.query(
-      `UPDATE invitations
-       SET consumed_at = NOW()
-       WHERE id = $1 AND organization_id = $2 AND consumed_at IS NULL
-       RETURNING email, role`,
-      [invitationId, organizationId]
-    );
+  const res = await client.query(
+    `UPDATE invitations
+     SET consumed_at = NOW()
+     WHERE id = $1 AND organization_id = $2 AND consumed_at IS NULL
+     RETURNING email, role`,
+    [invitationId, organizationId]
+  );
 
-    if (res.rowCount === 0) {
-      await client.query('COMMIT');
-      return false;
-    }
-
-    await recordSecurityAuditEvent(client, {
-      organizationId,
-      actorId: revokedBy,
-      eventType: 'INVITATION_REVOKED',
-      payload: {
-        invitationId,
-        email: res.rows[0].email,
-        role: res.rows[0].role,
-      },
-    });
-
-    await client.query('COMMIT');
-    return true;
-  } catch (err) {
-    await client.query('ROLLBACK').catch(() => {});
-    throw err;
+  if (res.rowCount === 0) {
+    return false;
   }
+
+  await recordSecurityAuditEvent(client, {
+    organizationId,
+    actorId: revokedBy,
+    eventType: 'INVITATION_REVOKED',
+    payload: {
+      invitationId,
+      email: res.rows[0].email,
+      role: res.rows[0].role,
+    },
+  });
+
+  return true;
 }
 
 /**

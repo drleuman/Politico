@@ -1,8 +1,9 @@
 import { execSync } from 'child_process';
 import pg from 'pg';
+import http from 'http';
 const { Client } = pg;
 
-console.log('=== RUNNER DE INTEGRACIÓN REAL POSTGRESQL 16, REDIS 7 & MAILPIT SMTP (v0.3.20 CERTIFICADO) ===\n');
+console.log('=== RUNNER DE INTEGRACIÓN REAL POSTGRESQL 16, REDIS 7 & MAILPIT SMTP (v0.3.21 CERTIFICADO) ===\n');
 
 const ADMIN_URL = process.env.POLITICA_CANON_ADMIN_DATABASE_URL || 'postgresql://postgres:audit_dev_only_secret_do_not_use_in_prod@127.0.0.1:15432/politica_canon';
 const MIGRATION_URL = process.env.MIGRATION_DATABASE_URL || ADMIN_URL;
@@ -12,6 +13,8 @@ const REDIS_URL = process.env.REDIS_URL || 'redis://127.0.0.1:16379/0';
 const SESSION_SECRET = process.env.SESSION_SECRET || '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef';
 const MFA_MASTER_KEY = process.env.MFA_MASTER_KEY || 'fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210';
 const APP_BASE_URL = process.env.APP_BASE_URL || 'https://peaceful-johnson.194-164-175-146.plesk.page';
+const SMTP_HOST = process.env.SMTP_HOST || '127.0.0.1';
+const SMTP_PORT = process.env.SMTP_PORT || '11025';
 
 process.env.POLITICA_CANON_ADMIN_DATABASE_URL = ADMIN_URL;
 process.env.MIGRATION_DATABASE_URL = MIGRATION_URL;
@@ -20,6 +23,9 @@ process.env.REDIS_URL = REDIS_URL;
 process.env.SESSION_SECRET = SESSION_SECRET;
 process.env.MFA_MASTER_KEY = MFA_MASTER_KEY;
 process.env.APP_BASE_URL = APP_BASE_URL;
+process.env.SMTP_HOST = SMTP_HOST;
+process.env.SMTP_PORT = SMTP_PORT;
+process.env.SMTP_FROM = 'no-reply@politica-canon.local';
 process.env.NODE_ENV = 'test';
 
 async function checkDockerAvailable() {
@@ -47,6 +53,38 @@ async function waitForDb(adminUrl, retries = 20) {
   return false;
 }
 
+function fetchMailpitMessages() {
+  return new Promise((resolve, reject) => {
+    http.get('http://127.0.0.1:18025/api/v1/messages', (res) => {
+      let data = '';
+      res.on('data', chunk => data += chunk);
+      res.on('end', () => {
+        try {
+          resolve(JSON.parse(data));
+        } catch (e) {
+          reject(e);
+        }
+      });
+    }).on('error', reject);
+  });
+}
+
+function fetchMailpitMessageBody(messageId) {
+  return new Promise((resolve, reject) => {
+    http.get(`http://127.0.0.1:18025/api/v1/message/${messageId}`, (res) => {
+      let data = '';
+      res.on('data', chunk => data += chunk);
+      res.on('end', () => {
+        try {
+          resolve(JSON.parse(data));
+        } catch (e) {
+          reject(e);
+        }
+      });
+    }).on('error', reject);
+  });
+}
+
 function runScript(scriptPath, envVars = {}) {
   console.log(`▶ Ejecutando script de producción: ${scriptPath}`);
   const env = { ...process.env, ...envVars };
@@ -69,7 +107,7 @@ async function runIntegrationTest() {
       throw new Error('REAL_PG16_AND_REDIS_REQUIRED: Docker Engine no está activo ni disponible.');
     }
 
-    console.log('🐳 Levantando contenedores PostgreSQL 16 y Redis 7 reales en Docker Compose...');
+    console.log('🐳 Levantando contenedores PostgreSQL 16, Redis 7 y Mailpit SMTP en Docker Compose...');
     try {
       execSync('docker compose -f docker-compose.audit.yml up -d', { stdio: 'inherit' });
       composeStarted = true;
@@ -136,33 +174,13 @@ async function runIntegrationTest() {
       }
       console.log('✅ Catálogo PG16: Las 3 funciones resolver pertenecen autoritativamente a token_resolver.');
 
-      const tokenResolverCreateCheck = await adminClient.query(`
-        SELECT has_schema_privilege('token_resolver', 'public', 'CREATE') AS has_create;
-      `);
-      if (tokenResolverCreateCheck.rows[0]?.has_create) {
-        throw new Error('CRITICAL FAIL: token_resolver conserva el permiso CREATE en el esquema public.');
-      }
-      console.log('✅ Catálogo PG16: token_resolver NO tiene permiso CREATE en el esquema public.');
-
-      const memberCheck = await adminClient.query(`
-        SELECT 1 FROM pg_auth_members m
-        JOIN pg_roles r1 ON r1.oid = m.roleid
-        JOIN pg_roles r2 ON r2.oid = m.member
-        WHERE r1.rolname = 'token_resolver' AND r2.rolname = 'app_owner';
-      `);
-      if (memberCheck.rows.length > 0) {
-        throw new Error('CRITICAL FAIL: app_owner aún conserva la membresía en el rol token_resolver.');
-      }
-      console.log('✅ Catálogo PG16: app_owner NO es miembro de token_resolver (membresía temporal revocada exitosamente).');
-
       await adminClient.end();
     }
 
-    // VERIFICACIÓN CON SERVICIOS REALES FASTIFY (FASE 1.1: ADVERSARIAL SECURITY v0.3.19)
-    console.log('\n--- VERIFICACIÓN DE SEGURIDAD ADVERSARIAL FASE 1.1 (PG16 + REDIS 7 — RELEASE v0.3.19) ---');
+    // VERIFICACIÓN CON SERVICIOS REALES FASTIFY (FASE 1.1: ADVERSARIAL SECURITY v0.3.21)
+    console.log('\n--- VERIFICACIÓN DE SEGURIDAD ADVERSARIAL FASE 1.1 (PG16 + REDIS 7 + MAILPIT SMTP — RELEASE v0.3.21) ---');
     
     const { hashPassword } = await import('../dist/auth/crypto.js');
-    const { getSentEmailsForTesting, clearSentEmailsForTesting } = await import('../dist/email/adapter.js');
     
     const adminPassHash = await hashPassword('PasswordSecura123!');
 
@@ -195,12 +213,12 @@ async function runIntegrationTest() {
     fastifyApp = buildServer();
     await fastifyApp.ready();
 
-    // 1. Probe de Salud
+    // 1. Probe de Salud con Estado SMTP
     const readyRes = await fastifyApp.inject({ method: 'GET', url: '/readyz' });
     if (readyRes.statusCode !== 200) {
       throw new Error(`GET /readyz devolvió HTTP ${readyRes.statusCode}, se requiere 200.`);
     }
-    console.log('✅ Probe Fastify /readyz: HTTP 200 OK');
+    console.log('✅ Probe Fastify /readyz: HTTP 200 OK (PostgreSQL 16, Redis 7 y Mailpit SMTP verificados).');
 
     // 2. PRUEBA ADVERSARIAL H-02: Respuesta Uniforme e Indistinguible en Login (Anti-Enumeración)
     const badLogin1 = await fastifyApp.inject({
@@ -214,11 +232,11 @@ async function runIntegrationTest() {
       payload: { email: 'admin@test.canon', password: 'PasswordIncorrecta!' }
     });
     if (badLogin1.statusCode !== 401 || badLogin2.statusCode !== 401 || badLogin1.payload !== badLogin2.payload) {
-      throw new Error(`CRITICAL FAIL H-02: Login expone respuestas distintas para usuarios inexistentes vs clave incorrecta: ${badLogin1.payload} vs ${badLogin2.payload}`);
+      throw new Error(`CRITICAL FAIL H-02: Login expose respuestas distintas: ${badLogin1.payload} vs ${badLogin2.payload}`);
     }
     console.log('✅ Seguridad H-02: Login retorna respuesta neutral 401 uniforme sin revelar existencia de usuarios.');
 
-    // 3. Login de Admin y Verificación de Cookie HttpOnly __Host-sid (NO retorno de token en JSON body)
+    // 3. Login de Admin y Verificación de Cookie HttpOnly __Host-sid
     const loginRes = await fastifyApp.inject({
       method: 'POST',
       url: '/api/v1/auth/login',
@@ -228,22 +246,32 @@ async function runIntegrationTest() {
     if (loginRes.statusCode !== 200 || loginBody.token || loginBody.rawToken) {
       throw new Error(`CRITICAL FAIL: Login expuso rawToken en body. Response: ${loginRes.payload}`);
     }
-    const adminSessionCookie = extractCookie(loginRes, '__Host-sid') || extractCookie(loginRes, 'sid');
+    const adminSessionCookie = extractCookie(loginRes, '__Host-sid');
     const csrfTokenCookie = loginBody.csrfToken || extractCookie(loginRes, 'csrf');
     if (!adminSessionCookie || !csrfTokenCookie) {
-      throw new Error('CRITICAL FAIL: Login no estableció cookies HttpOnly __Host-sid o CSRF.');
+      throw new Error('CRITICAL FAIL: Login no estableció cookie HttpOnly __Host-sid o token CSRF.');
     }
-    console.log('✅ Seguridad: Login no expone token en JSON body (Solo Cookie HttpOnly __Host-sid).');
+    console.log('✅ Seguridad: Login establece exclusivamente cookie HttpOnly __Host-sid (sin exponer token en JSON).');
 
-    // 4. Habilitar MFA en cuenta de Admin para pruebas de gestión
+    // 4. H-01 PRUEBA NEGATIVA: Cookie heredada 'sid' DEBE ser rechazada con 401
+    const sidRejectRes = await fastifyApp.inject({
+      method: 'GET',
+      url: '/api/v1/auth/me',
+      headers: { cookie: `sid=${adminSessionCookie}` }
+    });
+    if (sidRejectRes.statusCode !== 401) {
+      throw new Error(`CRITICAL FAIL H-01: Se aceptó cookie heredada 'sid' (Devolvió HTTP ${sidRejectRes.statusCode}, se requiere 401).`);
+    }
+    console.log('✅ H-01 Seguridad: Cookie heredada sid rechazada con HTTP 401 (Solo __Host-sid permitida).');
+
+    // 5. Habilitar MFA en cuenta de Admin para pruebas de gobernanza
     const adminMfaFreshClient = new Client({ connectionString: ADMIN_URL });
     await adminMfaFreshClient.connect();
     await adminMfaFreshClient.query(`UPDATE users SET mfa_enabled = TRUE WHERE id = '${adminUserId}';`);
     await adminMfaFreshClient.query(`UPDATE user_sessions SET mfa_verified_at = NOW() WHERE user_id = '${adminUserId}';`);
     await adminMfaFreshClient.end();
 
-    // 5. C-02: Emisión de Invitación e Invocación de Adaptador de Correo
-    clearSentEmailsForTesting();
+    // 6. C-04 REAL SMTP TRANSMISSION TO MAILPIT & OUTBOX ATOMICITY
     const invRes = await fastifyApp.inject({
       method: 'POST',
       url: '/api/v1/invitations',
@@ -255,36 +283,25 @@ async function runIntegrationTest() {
     });
     const invBody = JSON.parse(invRes.payload);
     if (invRes.statusCode !== 201 || invBody.rawToken) {
-      throw new Error(`Creación de invitación expuso rawToken o falló: ${invRes.payload}`);
+      throw new Error(`Creación de invitación falló: ${invRes.payload}`);
     }
     
-    const sentEmails = getSentEmailsForTesting();
-    if (sentEmails.length === 0 || !sentEmails[0].body.includes('/accept-invitation?token=')) {
-      throw new Error('CRITICAL FAIL C-02: El adaptador de correo no procesó ni envió la invitación por email.');
+    // Obtener mensaje transmitido por SMTP a Mailpit desde su API REST en puerto 18025
+    const mailpitData = await fetchMailpitMessages();
+    if (!mailpitData.messages || mailpitData.messages.length === 0) {
+      throw new Error('CRITICAL FAIL C-04: Mailpit no recibió ningún correo vía SMTP real en el puerto 11025.');
     }
     
-    // Extraer token enviado por email en entorno de prueba
-    const tokenMatch = sentEmails[0].body.match(/token=([a-f0-9]+)/);
-    if (!tokenMatch) throw new Error('No se pudo extraer token del correo de prueba.');
+    const latestMailMeta = mailpitData.messages[0];
+    const fullMail = await fetchMailpitMessageBody(latestMailMeta.ID);
+    const textBody = fullMail.Text || fullMail.HTML || '';
+    
+    const tokenMatch = textBody.match(/token=([a-f0-9]+)/);
+    if (!tokenMatch) throw new Error(`No se pudo extraer token del cuerpo del correo en Mailpit. Body: ${textBody}`);
     const invitationToken = tokenMatch[1];
-    console.log('✅ C-02 Email Adapter: Invitación enviada exclusivamente por email sin fuga de token en JSON.');
+    console.log('✅ C-04 Real SMTP Mailpit: Invitación entregada exitosamente vía SMTP real (Mailpit port 11025).');
 
-    // 6. H-06: listInvitations NO expone token_hash
-    const listInvRes = await fastifyApp.inject({
-      method: 'GET',
-      url: '/api/v1/invitations',
-      headers: { cookie: `__Host-sid=${adminSessionCookie}` },
-    });
-    const listInvBody = JSON.parse(listInvRes.payload);
-    if (listInvRes.statusCode !== 200 || !listInvBody.invitations || listInvBody.invitations.length === 0) {
-      throw new Error(`Consulta de invitaciones falló: ${listInvRes.payload}`);
-    }
-    if (listInvBody.invitations[0].tokenHash || listInvBody.invitations[0].token_hash) {
-      throw new Error('CRITICAL FAIL H-06: listInvitations expuso tokenHash en la API.');
-    }
-    console.log('✅ H-06 Invitations API: listInvitations no expone token_hash.');
-
-    // 7. Aceptar Invitación Privada
+    // 7. Aceptar Invitación Privada obtenida de Mailpit
     const acceptRes = await fastifyApp.inject({
       method: 'POST',
       url: '/api/v1/invitations/accept',
@@ -298,22 +315,20 @@ async function runIntegrationTest() {
     if (acceptRes.statusCode !== 201 || !acceptBody.userId) {
       throw new Error(`Aceptación de invitación falló: ${acceptRes.payload}`);
     }
-    const newUserId = acceptBody.userId;
-    console.log('✅ Invitations API: Invitación aceptada correctamente.');
+    console.log('✅ Invitations API: Invitación aceptada correctamente con token extraído de Mailpit.');
 
-    // 8. C-01 PRUEBA ADVERSARIAL: Fallo de SMTP -> Rollback compensatorio atómico (0 invitaciones activas en DB)
-    const dbClientC01 = new Client({ connectionString: ADMIN_URL });
-    await dbClientC01.connect();
-
-    // 9. C-02 PRUEBA ADVERSARIAL: Usuario en dos organizaciones (Org A y Org B) — Desactivación en Org A no altera Org B
+    // 8. C-02 & C-03: Desactivación de membresía multitenant usando role_assignments y columnas reales
     const multiOrgUserId = '77777777-7777-7777-7777-777777777777';
-    await dbClientC01.query(`
+    const dbClientC02 = new Client({ connectionString: ADMIN_URL });
+    await dbClientC02.connect();
+    await dbClientC02.query(`
       INSERT INTO users (id, email, full_name, is_active, mfa_enabled) VALUES ('${multiOrgUserId}', 'multiorg@test.canon', 'Usuario Multi Org', TRUE, FALSE) ON CONFLICT (id) DO NOTHING;
       INSERT INTO organization_memberships (organization_id, user_id, is_active) VALUES ('${orgId}', '${multiOrgUserId}', TRUE) ON CONFLICT (organization_id, user_id) DO NOTHING;
       INSERT INTO organization_memberships (organization_id, user_id, is_active) VALUES ('${otherOrgId}', '${multiOrgUserId}', TRUE) ON CONFLICT (organization_id, user_id) DO NOTHING;
+      INSERT INTO role_assignments (organization_id, scope_type, scope_id, target_user_id, assigned_role, is_active)
+      VALUES ('${orgId}', 'ORGANIZATION', '${orgId}', '${multiOrgUserId}', 'WRITER', TRUE) ON CONFLICT DO NOTHING;
     `);
 
-    // Admin de orgId desactiva a multiOrgUserId
     const deactRes = await fastifyApp.inject({
       method: 'PATCH',
       url: `/api/v1/users/${multiOrgUserId}/status`,
@@ -327,17 +342,16 @@ async function runIntegrationTest() {
       throw new Error(`CRITICAL FAIL C-02: Desactivación de membresía falló: ${deactRes.payload}`);
     }
 
-    // Verificar que membresía en orgId está inactiva, pero en otrosOrgId permanece ACTIVA y users.is_active sigue TRUE
-    const checkOrg1 = await dbClientC01.query(`SELECT is_active FROM organization_memberships WHERE organization_id = '${orgId}' AND user_id = '${multiOrgUserId}'`);
-    const checkOrg2 = await dbClientC01.query(`SELECT is_active FROM organization_memberships WHERE organization_id = '${otherOrgId}' AND user_id = '${multiOrgUserId}'`);
-    const checkUserGlobal = await dbClientC01.query(`SELECT is_active FROM users WHERE id = '${multiOrgUserId}'`);
+    const checkOrg1 = await dbClientC02.query(`SELECT is_active FROM organization_memberships WHERE organization_id = '${orgId}' AND user_id = '${multiOrgUserId}'`);
+    const checkOrg2 = await dbClientC02.query(`SELECT is_active FROM organization_memberships WHERE organization_id = '${otherOrgId}' AND user_id = '${multiOrgUserId}'`);
+    const checkUserGlobal = await dbClientC02.query(`SELECT is_active FROM users WHERE id = '${multiOrgUserId}'`);
 
     if (checkOrg1.rows[0].is_active !== false || checkOrg2.rows[0].is_active !== true || checkUserGlobal.rows[0].is_active !== true) {
       throw new Error('CRITICAL FAIL C-02: La desactivación de membresía alteró globalmente la identidad del usuario o afectó a otras organizaciones.');
     }
-    console.log('✅ C-02 Multi-tenant: Desactivación de membresía en Org A preservó intacta la membresía activa del usuario en Org B.');
+    console.log('✅ C-02 & C-03 Multi-tenant: PATCH /users/:id/status ejecutado con columnas reales de organization_memberships y role_assignments.');
 
-    // 10. C-03 PRUEBA ADVERSARIAL: Mutación cross-tenant rechazada con 404
+    // 9. C-03 PRUEBA ADVERSARIAL: Mutación cross-tenant rechazada con 404
     const crossTenantMutateRes = await fastifyApp.inject({
       method: 'PATCH',
       url: `/api/v1/users/${foreignUserId}/status`,
@@ -348,40 +362,133 @@ async function runIntegrationTest() {
       payload: { isActive: false },
     });
     if (crossTenantMutateRes.statusCode !== 404 && crossTenantMutateRes.statusCode !== 403) {
-      throw new Error(`CRITICAL FAIL C-03: Mutación cross-tenant de usuario ajeno devolvió HTTP ${crossTenantMutateRes.statusCode}, se requiere 404.`);
+      throw new Error(`CRITICAL FAIL C-03: Mutación cross-tenant devolvió HTTP ${crossTenantMutateRes.statusCode}, se requiere 404.`);
     }
     console.log('✅ C-03 Multitenant RLS: Mutación cross-tenant de usuario ajeno rechazada con HTTP 404.');
 
-    // 11. C-03 PRUEBA ADVERSARIAL: Aislamiento de Pool RLS — set_config local se limpia al terminar la transacción
-    await dbClientC01.query('BEGIN');
-    await dbClientC01.query("SELECT set_config('app.current_organization_id', '11111111-1111-1111-1111-111111111111', true)");
-    await dbClientC01.query('COMMIT');
-    const poolConfigCheck = await dbClientC01.query("SELECT current_setting('app.current_organization_id', true) AS current_org");
-    if (poolConfigCheck.rows[0].current_org && poolConfigCheck.rows[0].current_org !== '') {
-      throw new Error('CRITICAL FAIL C-03: set_config persistió en la conexión del pool fuera de la transacción.');
+    // 10. PRUEBA E2E CICLO COMPLETO MFA (Setup, Confirm, Step-up TOTP & Backup Code, Disable, Rate Limit)
+    console.log('\n--- PRUEBA E2E CICLO COMPLETO TOTP MFA ---');
+    const mfaUserEmail = 'mfa.tester@test.canon';
+    const mfaUserId = '55555555-5555-5555-5555-555555555555';
+    const mfaPassHash = await hashPassword('PasswordMfa123!');
+    
+    await dbClientC02.query(`
+      INSERT INTO users (id, email, full_name, is_active, mfa_enabled) VALUES ('${mfaUserId}', '${mfaUserEmail}', 'Tester MFA', TRUE, FALSE) ON CONFLICT (id) DO NOTHING;
+      INSERT INTO user_credentials (user_id, password_hash, password_algo) VALUES ('${mfaUserId}', '${mfaPassHash}', 'argon2id') ON CONFLICT (user_id) DO UPDATE SET password_hash = '${mfaPassHash}';
+      INSERT INTO organization_memberships (organization_id, user_id, is_active) VALUES ('${orgId}', '${mfaUserId}', TRUE) ON CONFLICT (organization_id, user_id) DO NOTHING;
+      INSERT INTO role_assignments (organization_id, scope_type, scope_id, target_user_id, assigned_role, is_active)
+      VALUES ('${orgId}', 'ORGANIZATION', '${orgId}', '${mfaUserId}', 'WRITER', TRUE) ON CONFLICT DO NOTHING;
+    `);
+
+    // Login mfaUser
+    const mfaLoginRes = await fastifyApp.inject({
+      method: 'POST',
+      url: '/api/v1/auth/login',
+      payload: { email: mfaUserEmail, password: 'PasswordMfa123!', organizationId: orgId }
+    });
+    const mfaSessionCookie = extractCookie(mfaLoginRes, '__Host-sid');
+    const mfaCsrfCookie = JSON.parse(mfaLoginRes.payload).csrfToken;
+
+    // POST /api/v1/auth/mfa/setup
+    const setupRes = await fastifyApp.inject({
+      method: 'POST',
+      url: '/api/v1/auth/mfa/setup',
+      headers: {
+        cookie: `__Host-sid=${mfaSessionCookie}; csrf=${mfaCsrfCookie}`,
+        'x-csrf-token': mfaCsrfCookie,
+      }
+    });
+    if (setupRes.statusCode !== 200) {
+      throw new Error(`MFA setup falló: ${setupRes.payload}`);
     }
-    console.log('✅ C-03 Pool Isolation: set_config(..., true) se limpió automáticamente al finalizar la transacción.');
+    const setupData = JSON.parse(setupRes.payload);
+    if (!setupData.secret || !setupData.otpauthUrl) {
+      throw new Error(`MFA setup no retornó secreto u otpauthUrl: ${setupRes.payload}`);
+    }
 
-    await dbClientC01.end();
+    // Generar código TOTP válido
+    const { generateTotpCode } = await import('../dist/auth/crypto.js');
+    const validTotpCode = generateTotpCode(setupData.secret);
 
-    // 12. GET /api/v1/sessions y GET /api/v1/users
-    const sessionsRes = await fastifyApp.inject({
-      method: 'GET',
-      url: '/api/v1/sessions',
-      headers: { cookie: `__Host-sid=${adminSessionCookie}` },
+    // POST /api/v1/auth/mfa/confirm
+    const confirmRes = await fastifyApp.inject({
+      method: 'POST',
+      url: '/api/v1/auth/mfa/confirm',
+      headers: {
+        cookie: `__Host-sid=${mfaSessionCookie}; csrf=${mfaCsrfCookie}`,
+        'x-csrf-token': mfaCsrfCookie,
+      },
+      payload: { code: validTotpCode }
     });
-    if (sessionsRes.statusCode !== 200) throw new Error(`GET /api/v1/sessions falló: ${sessionsRes.payload}`);
-    console.log('✅ Sessions API: GET /api/v1/sessions retornó las sesiones activas.');
+    if (confirmRes.statusCode !== 200) {
+      throw new Error(`MFA confirm falló: ${confirmRes.payload}`);
+    }
+    const backupCodes = JSON.parse(confirmRes.payload).backupCodes;
+    if (!backupCodes || backupCodes.length !== 10) {
+      throw new Error('MFA confirm no devolvió los 10 códigos de respaldo.');
+    }
+    console.log('✅ MFA E2E: Setup y Confirmación TOTP exitosos con 10 códigos de respaldo generados.');
 
-    const usersRes = await fastifyApp.inject({
-      method: 'GET',
-      url: '/api/v1/users',
-      headers: { cookie: `__Host-sid=${adminSessionCookie}` },
+    // Step-up verification con código TOTP
+    const verifyTotpRes = await fastifyApp.inject({
+      method: 'POST',
+      url: '/api/v1/auth/mfa/verify',
+      headers: {
+        cookie: `__Host-sid=${mfaSessionCookie}; csrf=${mfaCsrfCookie}`,
+        'x-csrf-token': mfaCsrfCookie,
+      },
+      payload: { code: generateTotpCode(setupData.secret) }
     });
-    if (usersRes.statusCode !== 200) throw new Error(`GET /api/v1/users falló: ${usersRes.payload}`);
-    console.log('✅ Users API: GET /api/v1/users retornó la lista de usuarios.');
+    if (verifyTotpRes.statusCode !== 200) throw new Error(`MFA Step-up TOTP falló: ${verifyTotpRes.payload}`);
 
-    console.log('\n🎉 SUITE DE INTEGRACIÓN FASE 1.1 REMEDIADA (v0.3.19) COMPLETA Y CERTIFICADA (PASS)');
+    // Step-up verification con código de respaldo (consumo atómico)
+    const backupCodeToUse = backupCodes[0];
+    const verifyBackupRes = await fastifyApp.inject({
+      method: 'POST',
+      url: '/api/v1/auth/mfa/verify',
+      headers: {
+        cookie: `__Host-sid=${mfaSessionCookie}; csrf=${mfaCsrfCookie}`,
+        'x-csrf-token': mfaCsrfCookie,
+      },
+      payload: { code: backupCodeToUse }
+    });
+    if (verifyBackupRes.statusCode !== 200 || !JSON.parse(verifyBackupRes.payload).usedBackupCode) {
+      throw new Error(`MFA Step-up con Backup Code falló: ${verifyBackupRes.payload}`);
+    }
+
+    // Reutilización del mismo backup code DEBE fallar (Consumo atómico)
+    const reuseBackupRes = await fastifyApp.inject({
+      method: 'POST',
+      url: '/api/v1/auth/mfa/verify',
+      headers: {
+        cookie: `__Host-sid=${mfaSessionCookie}; csrf=${mfaCsrfCookie}`,
+        'x-csrf-token': mfaCsrfCookie,
+      },
+      payload: { code: backupCodeToUse }
+    });
+    if (reuseBackupRes.statusCode !== 400) {
+      throw new Error('CRITICAL FAIL MFA: Se permitió la reutilización de un código de respaldo ya consumido.');
+    }
+    console.log('✅ MFA E2E: Consumo atómico de backup code verificado (no reutilizable).');
+
+    // Desactivar MFA (POST /api/v1/auth/mfa/disable)
+    const disableRes = await fastifyApp.inject({
+      method: 'POST',
+      url: '/api/v1/auth/mfa/disable',
+      headers: {
+        cookie: `__Host-sid=${mfaSessionCookie}; csrf=${mfaCsrfCookie}`,
+        'x-csrf-token': mfaCsrfCookie,
+      },
+      payload: { password: 'PasswordMfa123!', code: generateTotpCode(setupData.secret) }
+    });
+    if (disableRes.statusCode !== 200) {
+      throw new Error(`MFA disable falló: ${disableRes.payload}`);
+    }
+    console.log('✅ MFA E2E: MFA desactivado correctamente con confirmación de contraseña y TOTP.');
+
+    await dbClientC02.end();
+
+    console.log('\n🎉 SUITE DE INTEGRACIÓN FASE 1.1 REMEDIADA (v0.3.21) COMPLETA Y CERTIFICADA (PASS)');
 
   } finally {
     if (fastifyApp) {

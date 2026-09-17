@@ -14,6 +14,7 @@ export interface AppConfig {
   redisUrl: string;
   sessionSecret: string;
   mfaMasterKey: string;
+  emailOutboxEncryptionKey: string;
   smtpHost?: string;
   smtpPort?: number;
   smtpUser?: string;
@@ -33,6 +34,7 @@ function validateConfig(): AppConfig {
   const redisUrl = process.env.REDIS_URL;
   const sessionSecret = process.env.SESSION_SECRET;
   const mfaMasterKey = process.env.MFA_MASTER_KEY || process.env.SESSION_SECRET; // Fallback to sessionSecret for dev if not set, but validate length
+  const emailOutboxEncryptionKey = process.env.EMAIL_OUTBOX_ENCRYPTION_KEY || process.env.MFA_MASTER_KEY || process.env.SESSION_SECRET;
 
   const smtpHost = process.env.SMTP_HOST;
   const smtpPort = process.env.SMTP_PORT ? parseInt(process.env.SMTP_PORT, 10) : undefined;
@@ -49,6 +51,7 @@ function validateConfig(): AppConfig {
 
   if (nodeEnv === 'production') {
     if (!process.env.MFA_MASTER_KEY) missing.push('MFA_MASTER_KEY');
+    if (!process.env.EMAIL_OUTBOX_ENCRYPTION_KEY) missing.push('EMAIL_OUTBOX_ENCRYPTION_KEY');
   }
 
   if (missing.length > 0) {
@@ -67,6 +70,12 @@ function validateConfig(): AppConfig {
     process.exit(1);
   }
 
+  const effectiveOutboxKey = process.env.EMAIL_OUTBOX_ENCRYPTION_KEY || (nodeEnv === 'test' ? '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef_outbox' : effectiveMfaMasterKey);
+  if (!effectiveOutboxKey || effectiveOutboxKey.length < 32) {
+    console.error('[FATAL] Configuration validation failed closed. EMAIL_OUTBOX_ENCRYPTION_KEY must be at least 32 characters in length.');
+    process.exit(1);
+  }
+
   if (sessionSecret && effectiveMfaMasterKey && sessionSecret === effectiveMfaMasterKey && nodeEnv !== 'test') {
     console.error('[FATAL] Configuration validation failed closed. MFA_MASTER_KEY must be cryptographically independent and cannot equal SESSION_SECRET.');
     process.exit(1);
@@ -82,6 +91,7 @@ function validateConfig(): AppConfig {
     redisUrl: redisUrl!,
     sessionSecret: sessionSecret!,
     mfaMasterKey: effectiveMfaMasterKey,
+    emailOutboxEncryptionKey: effectiveOutboxKey,
     smtpHost,
     smtpPort,
     smtpUser,

@@ -1,7 +1,7 @@
 {
   "name": "politica-canon",
-  "version": "0.3.25",
-  "description": "Monolito Fastify, Identidad, Invitaciones Privadas, Usuarios, Sesiones y RBAC/ABAC — Política Canon v0.3.25 (Fase 1.1 Funcional Remediada Certificada)",
+  "version": "0.3.26",
+  "description": "Monolito Fastify, Identidad, Invitaciones Privadas, Usuarios, Sesiones y RBAC/ABAC — Política Canon v0.3.26 (Fase 1.1 Funcional Remediada Certificada)",
   "type": "module",
   "main": "dist/server.js",
   "scripts": {

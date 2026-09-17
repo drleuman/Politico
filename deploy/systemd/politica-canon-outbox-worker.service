@@ -1,5 +1,5 @@
 [Unit]
-Description=Politica Canon Outbox Worker Service (v0.3.25)
+Description=Politica Canon Outbox Worker Service (v0.3.26)
 After=network.target postgresql.service
 Wants=postgresql.service
 

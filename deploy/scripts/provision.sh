@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# Script de Provisión Inicial de Servidor — Política Canon v0.3.25
+# Script de Provisión Inicial de Servidor — Política Canon v0.3.26
 # Ejecutar en el servidor Ubuntu 24.04 / Plesk como root o con sudo
 
 set -euo pipefail
 
-echo "== [POLÍTICA CANON v0.3.25] Provisión Inicial de Servidor =="
+echo "== [POLÍTICA CANON v0.3.26] Provisión Inicial de Servidor =="
 
 # 1. Crear usuario del sistema sin shell interactiva y asociar pertenencia de grupo postgres (B-02)
 if ! id -u politica-canon >/dev/null 2>&1; then
@@ -61,7 +61,7 @@ if [ -z "${DERIVED_DB_URL}" ]; then
     exit 1
 fi
 
-# 5. Generar/Preservar secreto independiente para el worker y asignar contraseña PostgreSQL (C-02)
+# 5. Generar/Preservar secreto independiente para el worker y asignar contraseña PostgreSQL (C-01, C-02)
 EXISTING_WORKER_PASS=""
 if [ -f /etc/politica-canon/runtime.env ]; then
     EXISTING_WORKER_PASS=$(grep -E '^POLITICA_CANON_WORKER_DB_PASS=' /etc/politica-canon/runtime.env | cut -d'=' -f2- || true)
@@ -78,18 +78,30 @@ else
     echo "[+] Generada nueva contraseña independiente para politica_canon_email_worker."
 fi
 
-# Asignar la contraseña al rol politica_canon_email_worker en PostgreSQL como superusuario postgres
+# Asignar la contraseña al rol politica_canon_email_worker en PostgreSQL como superusuario postgres (C-01, C-02 Fail-Closed)
 if command -v psql >/dev/null 2>&1; then
-    echo "[+] Asignando contraseña a rol PostgreSQL 'politica_canon_email_worker'..."
-    su - postgres -c "psql -d politica_canon -c \"ALTER ROLE politica_canon_email_worker WITH PASSWORD '${WORKER_DB_PASS}';\"" 2>/dev/null || true
+    echo "[+] Verificando y asignando contraseña a rol PostgreSQL 'politica_canon_email_worker'..."
+    su - postgres -c "psql -d politica_canon -c \"
+    DO \\\$\$
+    BEGIN
+        IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'politica_canon_email_worker') THEN
+            CREATE ROLE politica_canon_email_worker WITH LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS CONNECTION LIMIT 5;
+        END IF;
+    END \\\$\$;
+    ALTER ROLE politica_canon_email_worker WITH PASSWORD '${WORKER_DB_PASS}';
+    \""
+    echo "[+] Autenticación del worker configurada. Verificando conexión a BD..."
+    PGPASSWORD="${WORKER_DB_PASS}" psql -h 127.0.0.1 -U politica_canon_email_worker -d politica_canon -c "SELECT current_user;" >/dev/null
+    echo "[+] Conexión de 'politica_canon_email_worker' verificada exitosamente."
 fi
 
-# Construir URL explícita del worker con su secrecto independiente
+# Construir URL explícita del worker con su secreto independiente
 DERIVED_EMAIL_WORKER_URL="postgresql://politica_canon_email_worker:${WORKER_DB_PASS}@127.0.0.1:5432/politica_canon"
 
-# 6. Recuperar o generar SESSION_SECRET y MFA_MASTER_KEY (32+ bytes / 64+ hex)
+# 6. Recuperar o generar SESSION_SECRET, MFA_MASTER_KEY y EMAIL_OUTBOX_ENCRYPTION_KEY (32+ bytes / 64+ hex)
 EXISTING_SESSION_SECRET=""
 EXISTING_MFA_KEY=""
+EXISTING_OUTBOX_KEY=""
 EXISTING_SMTP_HOST=""
 EXISTING_SMTP_PORT=""
 EXISTING_SMTP_USER=""
@@ -100,6 +112,7 @@ EXISTING_SMTP_SECURE=""
 if [ -f /etc/politica-canon/runtime.env ]; then
     EXISTING_SESSION_SECRET=$(grep -E '^SESSION_SECRET=' /etc/politica-canon/runtime.env | cut -d'=' -f2- || true)
     EXISTING_MFA_KEY=$(grep -E '^MFA_MASTER_KEY=' /etc/politica-canon/runtime.env | cut -d'=' -f2- || true)
+    EXISTING_OUTBOX_KEY=$(grep -E '^EMAIL_OUTBOX_ENCRYPTION_KEY=' /etc/politica-canon/runtime.env | cut -d'=' -f2- || true)
     EXISTING_SMTP_HOST=$(grep -E '^SMTP_HOST=' /etc/politica-canon/runtime.env | cut -d'=' -f2- || true)
     EXISTING_SMTP_PORT=$(grep -E '^SMTP_PORT=' /etc/politica-canon/runtime.env | cut -d'=' -f2- || true)
     EXISTING_SMTP_USER=$(grep -E '^SMTP_USER=' /etc/politica-canon/runtime.env | cut -d'=' -f2- || true)
@@ -114,6 +127,7 @@ fi
 # Preservar de /root/politica-canon/runtime.env si no existían en /etc
 if [ -f /root/politica-canon/runtime.env ]; then
     [ -z "${EXISTING_MFA_KEY}" ] && EXISTING_MFA_KEY=$(grep -E '^MFA_MASTER_KEY=' /root/politica-canon/runtime.env | cut -d'=' -f2- || true)
+    [ -z "${EXISTING_OUTBOX_KEY}" ] && EXISTING_OUTBOX_KEY=$(grep -E '^EMAIL_OUTBOX_ENCRYPTION_KEY=' /root/politica-canon/runtime.env | cut -d'=' -f2- || true)
     [ -z "${EXISTING_SMTP_HOST}" ] && EXISTING_SMTP_HOST=$(grep -E '^SMTP_HOST=' /root/politica-canon/runtime.env | cut -d'=' -f2- || true)
     [ -z "${EXISTING_SMTP_PORT}" ] && EXISTING_SMTP_PORT=$(grep -E '^SMTP_PORT=' /root/politica-canon/runtime.env | cut -d'=' -f2- || true)
     [ -z "${EXISTING_SMTP_USER}" ] && EXISTING_SMTP_USER=$(grep -E '^SMTP_USER=' /root/politica-canon/runtime.env | cut -d'=' -f2- || true)
@@ -138,6 +152,14 @@ else
     echo "[+] Generada nueva MFA_MASTER_KEY independiente de 32 bytes (64 hex)."
 fi
 
+if [ -n "${EXISTING_OUTBOX_KEY}" ] && [ "${#EXISTING_OUTBOX_KEY}" -ge 32 ]; then
+    EMAIL_OUTBOX_ENCRYPTION_KEY="${EXISTING_OUTBOX_KEY}"
+    echo "[+] Preservando EMAIL_OUTBOX_ENCRYPTION_KEY existente válida."
+else
+    EMAIL_OUTBOX_ENCRYPTION_KEY=$(openssl rand -hex 32 || head -c 64 /dev/urandom | xxd -p | tr -d '\n')
+    echo "[+] Generada nueva EMAIL_OUTBOX_ENCRYPTION_KEY de 32 bytes (64 hex)."
+fi
+
 # 7. Escribir /etc/politica-canon/runtime.env.tmp de forma atómica y restrictiva con umask 0077
 TMP_ENV="/etc/politica-canon/runtime.env.tmp"
 (
@@ -145,7 +167,7 @@ TMP_ENV="/etc/politica-canon/runtime.env.tmp"
     touch "${TMP_ENV}"
     chmod 0640 "${TMP_ENV}"
     cat <<EOF > "${TMP_ENV}"
-# Configuración de tiempo de ejecución Política Canon v0.3.25
+# Configuración de tiempo de ejecución Política Canon v0.3.26
 NODE_ENV=production
 PORT=3000
 HOST=127.0.0.1
@@ -156,6 +178,7 @@ EMAIL_WORKER_DATABASE_URL=${DERIVED_EMAIL_WORKER_URL}
 POLITICA_CANON_WORKER_DB_PASS=${WORKER_DB_PASS}
 SESSION_SECRET=${SESSION_SECRET}
 MFA_MASTER_KEY=${MFA_MASTER_KEY}
+EMAIL_OUTBOX_ENCRYPTION_KEY=${EMAIL_OUTBOX_ENCRYPTION_KEY}
 SMTP_HOST=${EXISTING_SMTP_HOST}
 SMTP_PORT=${EXISTING_SMTP_PORT:-587}
 SMTP_USER=${EXISTING_SMTP_USER}
@@ -166,7 +189,7 @@ EOF
 )
 
 # Validar contenido obligatorio antes de reemplazar
-if ! grep -q "^SESSION_SECRET=" "${TMP_ENV}" || ! grep -q "^MFA_MASTER_KEY=" "${TMP_ENV}" || ! grep -q "^DATABASE_URL=" "${TMP_ENV}" || ! grep -q "^EMAIL_WORKER_DATABASE_URL=" "${TMP_ENV}"; then
+if ! grep -q "^SESSION_SECRET=" "${TMP_ENV}" || ! grep -q "^MFA_MASTER_KEY=" "${TMP_ENV}" || ! grep -q "^EMAIL_OUTBOX_ENCRYPTION_KEY=" "${TMP_ENV}" || ! grep -q "^DATABASE_URL=" "${TMP_ENV}" || ! grep -q "^EMAIL_WORKER_DATABASE_URL=" "${TMP_ENV}"; then
     echo "❌ ERROR FATAL: El archivo de entorno temporal no contiene las variables obligatorias. Abortando provisión."
     rm -f "${TMP_ENV}"
     exit 1
@@ -210,4 +233,5 @@ if ! systemctl is-active --quiet politica-canon-outbox-worker.service; then
     exit 1
 fi
 
-echo "== [POLÍTICA CANON v0.3.25] Provisión completada exitosamente =="
+echo "== [POLÍTICA CANON v0.3.26] Provisión completada exitosamente =="
+

@@ -61,12 +61,21 @@ BEGIN
     IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'email_worker') THEN
         CREATE ROLE email_worker WITH NOLOGIN NOINHERIT NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS NOREPLICATION;
     ELSE
-        ALTER ROLE email_worker WITH NOLOGIN NOINHERIT NOSUPERUSER NOCREATEROLE NOBYPASSRLS NOREPLICATION;
+        ALTER ROLE email_worker WITH NOLOGIN NOINHERIT NOSUPERUSER NOCREATEDB NOBYPASSRLS NOREPLICATION;
+    END IF;
+
+    -- 9. Rol de Conexión Runtime Específico del Worker de Correo (politica_canon_email_worker - C-01, C-02)
+    IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'politica_canon_email_worker') THEN
+        CREATE ROLE politica_canon_email_worker WITH LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS NOREPLICATION CONNECTION LIMIT 5;
+    ELSE
+        ALTER ROLE politica_canon_email_worker WITH LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS NOREPLICATION CONNECTION LIMIT 5;
     END IF;
 END $$;
 
--- Enlazar la identidad de runtime al rol canónico app_user y otorgar ADMIN OPTION temporal a app_owner para asignación DDL
+-- Enlazar las identidades de runtime a los roles canónicos app_user y email_worker
 GRANT app_user TO politica_canon_app;
+GRANT email_worker TO politica_canon_email_worker;
+GRANT CONNECT ON DATABASE politica_canon TO politica_canon_app, politica_canon_email_worker;
 GRANT token_resolver TO app_owner WITH ADMIN OPTION;
 GRANT USAGE, CREATE ON SCHEMA public TO token_resolver, app_owner, app_user, politica_canon_app;
 

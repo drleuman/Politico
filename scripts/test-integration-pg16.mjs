@@ -3,7 +3,7 @@ import pg from 'pg';
 import http from 'http';
 const { Client } = pg;
 
-console.log('=== RUNNER DE INTEGRACIÓN REAL POSTGRESQL 16, REDIS 7 & MAILPIT SMTP (v0.3.27 CERTIFICADO) ===\n');
+console.log('=== RUNNER DE INTEGRACIÓN REAL POSTGRESQL 16, REDIS 7 & MAILPIT SMTP (v0.3.28 CERTIFICADO) ===\n');
 
 const ADMIN_URL = process.env.POLITICA_CANON_ADMIN_DATABASE_URL || 'postgresql://postgres:audit_dev_only_secret_do_not_use_in_prod@127.0.0.1:15432/politica_canon';
 const MIGRATION_URL = process.env.MIGRATION_DATABASE_URL || ADMIN_URL;
@@ -140,7 +140,24 @@ async function runIntegrationTest() {
       runScript('scripts/migrate-production.mjs');
       runScript('scripts/bootstrap-post.mjs');
 
-      console.log(`\n--- ASERCIONES DE CATÁLOGO PG16 REAL (RONDA ${round}) ---`);
+      // H-05 Prueba de Convergencia: Degradar deliberadamente email_worker con CREATEROLE y CREATEDB
+      console.log("🧪 [H-05 TEST CONVERGENCE] Degradando deliberadamente 'email_worker' asignándole CREATEROLE y CREATEDB...");
+      await adminClient.query("ALTER ROLE email_worker WITH CREATEROLE CREATEDB;");
+      const degradedCheck = await adminClient.query("SELECT rolcreaterole, rolcreatedb FROM pg_roles WHERE rolname = 'email_worker';");
+      if (!degradedCheck.rows[0]?.rolcreaterole || !degradedCheck.rows[0]?.rolcreatedb) {
+        throw new Error("H-05 Test FAIL: No se pudo degradar email_worker para la prueba.");
+      }
+      console.log("ℹ️ [H-05 TEST CONVERGENCE] email_worker degradado a (rolcreaterole=true, rolcreatedb=true). Re-ejecutando bootstrap-pre.mjs...");
+      runScript('scripts/bootstrap-pre.mjs');
+
+      const convergedCheck = await adminClient.query("SELECT rolcreaterole, rolcreatedb, rolsuper, rolcanlogin FROM pg_roles WHERE rolname = 'email_worker';");
+      const conv = convergedCheck.rows[0];
+      if (conv.rolcreaterole || conv.rolcreatedb || conv.rolsuper || conv.rolcanlogin) {
+        throw new Error(`H-05 Test FAIL: email_worker no convergió tras re-ejecutar bootstrap-pre.mjs. Obtenido: createrole=${conv.rolcreaterole}, createdb=${conv.rolcreatedb}.`);
+      }
+      console.log("✅ H-05 Pruebas de Convergencia: email_worker degradado deliberadamente con CREATEROLE/CREATEDB convergió de nuevo al estado canónico de mínimos privilegios (rolcreaterole=false, rolcreatedb=false).");
+
+      console.log('\n--- ASERCIONES DE CATÁLOGO PG16 REAL (RONDA ' + round + ') ---');
       const ownerCheck = await adminClient.query("SELECT pg_catalog.pg_get_userbyid(datdba) AS db_owner FROM pg_catalog.pg_database WHERE datname = 'politica_canon';");
       const dbOwner = ownerCheck.rows[0]?.db_owner;
       if (dbOwner !== 'app_owner') {
@@ -180,8 +197,8 @@ async function runIntegrationTest() {
       await adminClient.end();
     }
 
-    // VERIFICACIÓN CON SERVICIOS REALES FASTIFY (FASE 1.1: ADVERSARIAL SECURITY v0.3.27)
-    console.log('\n--- VERIFICACIÓN DE SEGURIDAD ADVERSARIAL FASE 1.1 (PG16 + REDIS 7 + MAILPIT SMTP — RELEASE v0.3.27) ---');
+    // VERIFICACIÓN CON SERVICIOS REALES FASTIFY (FASE 1.1: ADVERSARIAL SECURITY v0.3.28)
+    console.log('\n--- VERIFICACIÓN DE SEGURIDAD ADVERSARIAL FASE 1.1 (PG16 + REDIS 7 + MAILPIT SMTP — RELEASE v0.3.28) ---');
     
     const { hashPassword } = await import('../dist/auth/crypto.js');
     
@@ -703,7 +720,7 @@ async function runIntegrationTest() {
 
     await dbClientC02.end();
 
-    console.log('\n🎉 SUITE DE INTEGRACIÓN FASE 1.1 REMEDIADA (v0.3.27) COMPLETA Y CERTIFICADA (PASS)');
+    console.log('\n🎉 SUITE DE INTEGRACIÓN FASE 1.1 REMEDIADA (v0.3.28) COMPLETA Y CERTIFICADA (PASS)');
 
   } finally {
     if (fastifyApp) {

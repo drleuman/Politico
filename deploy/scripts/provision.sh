@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# Script de Provisión Inicial de Servidor — Política Canon v0.3.27
+# Script de Provisión Inicial de Servidor — Política Canon v0.3.28
 # Ejecutar en el servidor Ubuntu 24.04 / Plesk como root o con sudo
 
 set -euo pipefail
 
-echo "== [POLÍTICA CANON v0.3.27] Provisión Inicial de Servidor =="
+echo "== [POLÍTICA CANON v0.3.28] Provisión Inicial de Servidor =="
 
 # 1. Crear usuario del sistema sin shell interactiva y asociar pertenencia de grupo postgres (B-02)
 if ! id -u politica-canon >/dev/null 2>&1; then
@@ -182,7 +182,7 @@ TMP_ENV="/etc/politica-canon/runtime.env.tmp"
     touch "${TMP_ENV}"
     chmod 0640 "${TMP_ENV}"
     cat <<EOF > "${TMP_ENV}"
-# Configuración de tiempo de ejecución Política Canon v0.3.27
+# Configuración de tiempo de ejecución Política Canon v0.3.28
 NODE_ENV=production
 PORT=3000
 HOST=127.0.0.1
@@ -261,4 +261,4 @@ else
     echo "ℹ️ [DESPLIEGUE INICIAL / SECUENCIACIÓN C-02] La tabla 'email_outbox' no existe aún en la base de datos. Unidades systemd registradas y habilitadas (enable). Ejecutar ahora: 'npm run bootstrap:pre && npm run migrate:prod && npm run bootstrap:post' y posteriormente 'systemctl start politica-canon.service politica-canon-outbox-worker.service'."
 fi
 
-echo "== [POLÍTICA CANON v0.3.27] Provisión completada exitosamente =="
+echo "== [POLÍTICA CANON v0.3.28] Provisión completada exitosamente =="

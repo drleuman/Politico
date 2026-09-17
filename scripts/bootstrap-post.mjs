@@ -105,6 +105,22 @@ async function runPostBootstrap() {
     }
     console.log(`✅ Catálogo PG16: revoke_all_user_sessions_sec pertenece a '${fnOwner}' (BYPASSRLS).`);
 
+    // Aserción H-05: Verificación de atributos del grupo NOLOGIN email_worker
+    const emailWorkerGroupCheck = await client.query(`
+      SELECT rolcanlogin, rolsuper, rolcreatedb, rolcreaterole, rolreplication, rolbypassrls
+      FROM pg_roles WHERE rolname = 'email_worker';
+    `);
+    if (emailWorkerGroupCheck.rows.length === 0) {
+      console.error("❌ ERROR FATAL (H-05): El rol grupo 'email_worker' no fue creado.");
+      process.exit(1);
+    }
+    const ewg = emailWorkerGroupCheck.rows[0];
+    if (ewg.rolcanlogin || ewg.rolsuper || ewg.rolcreatedb || ewg.rolcreaterole || ewg.rolreplication || ewg.rolbypassrls) {
+      console.error(`❌ ERROR FATAL (H-05): Atributos de privilegios no canónicos en 'email_worker' (createrole=${ewg.rolcreaterole}, super=${ewg.rolsuper}, login=${ewg.rolcanlogin}). Exigido todos false.`);
+      process.exit(1);
+    }
+    console.log(`✅ Catálogo PG16 (H-05): Rol grupo 'email_worker' verificado con convergencia exacta a mínimos privilegios (rolcreaterole=false).`);
+
     // Aserción C-01 & C-02 (v0.3.24): Verificación de rol LOGIN dedicado politica_canon_email_worker y permisos DML
     const workerRoleCheck = await client.query(`
       SELECT r.rolcanlogin, r.rolsuper, r.rolcreatedb, r.rolcreaterole, r.rolbypassrls,

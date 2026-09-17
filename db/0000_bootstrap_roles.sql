@@ -1,5 +1,5 @@
 -- ============================================================================
--- FASE 1: PRE-BOOTSTRAP DE ROLES Y GRUPOS DE SEGURIDAD CANÓNICOS (v0.3.27)
+-- FASE 1: PRE-BOOTSTRAP DE ROLES Y GRUPOS DE SEGURIDAD CANÓNICOS (v0.3.28)
 -- Ejecutar exclusivamente como SUPERUSUARIO ('postgres') antes de crear objetos
 -- ============================================================================
 
@@ -57,11 +57,11 @@ BEGIN
         ALTER ROLE politica_canon_app WITH NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS NOREPLICATION CONNECTION LIMIT 10;
     END IF;
 
-    -- 8. Rol Grupo de Worker de Correo (email_worker)
+    -- 8. Rol Grupo de Worker de Correo (email_worker - H-05)
     IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'email_worker') THEN
         CREATE ROLE email_worker WITH NOLOGIN NOINHERIT NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS NOREPLICATION;
     ELSE
-        ALTER ROLE email_worker WITH NOLOGIN NOINHERIT NOSUPERUSER NOCREATEDB NOBYPASSRLS NOREPLICATION;
+        ALTER ROLE email_worker WITH NOLOGIN NOINHERIT NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS NOREPLICATION;
     END IF;
 
     -- 9. Rol de Conexión Runtime Específico del Worker de Correo (politica_canon_email_worker - C-01, C-02)

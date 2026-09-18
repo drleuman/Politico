@@ -1,10 +1,10 @@
 <!DOCTYPE html>
-<!-- Política Canon v0.3.30 -->
+<!-- Política Canon v0.4.0-alpha.4 -->
 <html lang="es">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Intranet Privada — Política Canon v0.3.30</title>
+  <title>Intranet Privada — Política Canon v0.4.0-alpha.4</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -15,6 +15,8 @@
   <link rel="stylesheet" href="/styles/layout.css">
   <link rel="stylesheet" href="/styles/components.css">
   <script src="/js/confirm-dialog.js"></script>
+  <script src="/js/toast.js"></script>
+  <script src="/js/empty-state.js"></script>
 </head>
 <body>
   <!-- B2: Arquitectura de Layout Dinámico por Categoría -->
@@ -23,7 +25,7 @@
       <div class="header-badge">
         <span class="status-dot"></span> Intranet Segura · Nginx Gateway HTTPS
       </div>
-      <h1>Política Canon v0.4.0-alpha.2</h1>
+      <h1>Política Canon v0.4.0-alpha.4</h1>
       <p class="subtitle">Plataforma Canónica de Gobernanza, Identidad Privada y Auditoría Inmutable.</p>
 
       <!-- AUD-001: Estructura WAI-ARIA para Pestañas -->
@@ -36,7 +38,7 @@
         <button class="tab-btn" id="tab-users" role="tab" aria-selected="false" aria-controls="usersTab" tabindex="-1" onclick="showTab('usersTab', event)">Usuarios</button>
       </div>
 
-      <!-- AUD-009: Región ARIA Live para Alertas -->
+      <!-- AUD-009: Región ARIA Live para Alertas Contextuales -->
       <div id="alertBox" class="alert" role="status" aria-live="polite"></div>
 
       <!-- Tab: Login -->
@@ -80,7 +82,7 @@
 
       <!-- Tab: Sessions -->
       <div id="sessionsTab" class="tab-content" role="tabpanel" tabindex="0" aria-labelledby="tab-sessions" style="display:none;">
-        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem;">
+        <div style="display:flex; justify-space-between; align-items:center; margin-bottom:1rem;">
           <h3>Sesiones Activas en la Cuenta</h3>
           <button class="btn-danger" id="revokeAllBtn" onclick="handleRevokeAllOtherSessions(event)">Revocar Todas las Demás</button>
         </div>
@@ -156,7 +158,7 @@
     </div>
 
     <div class="footer">
-      Política Canon v0.4.0-alpha.1 — Sistema Canónico de Gobernanza y Auditoría Inmutable
+      Política Canon v0.4.0-alpha.4 — Sistema Canónico de Gobernanza y Auditoría Inmutable
     </div>
   </div>
 
@@ -168,6 +170,11 @@
       box.textContent = msg;
       box.className = 'alert ' + (isError ? 'alert-danger' : 'alert-success');
       box.style.display = 'block';
+
+      // AUD-009: Notificación Toast contextual sincronizada
+      if (typeof showToast === 'function') {
+        showToast({ message: msg, type: isError ? 'danger' : 'success' });
+      }
     }
 
     function hideAlert() {
@@ -352,6 +359,19 @@
         if (!res.ok) return;
         const data = await res.json();
 
+        // AUD-008: Renderizado de Estado Vacío en ausencia de registros
+        if (!data.sessions || data.sessions.length === 0) {
+          if (typeof renderEmptyState === 'function') {
+            renderEmptyState(tbody, {
+              title: 'No hay sesiones activas adicionales',
+              description: 'Únicamente tu sesión actual se encuentra registrada en la plataforma.',
+              icon: '💻',
+              colspan: 5
+            });
+          }
+          return;
+        }
+
         // C-04: Renderizado seguro de tabla mediante APIs DOM estándar sin innerHTML
         data.sessions.forEach(s => {
           const tr = document.createElement('tr');
@@ -444,6 +464,19 @@
         if (!res.ok) return;
         const data = await res.json();
 
+        // AUD-008: Renderizado de Estado Vacío en ausencia de invitaciones pendientes
+        if (!data.invitations || data.invitations.length === 0) {
+          if (typeof renderEmptyState === 'function') {
+            renderEmptyState(tbody, {
+              title: 'No hay invitaciones pendientes',
+              description: 'Utiliza el formulario superior para emitir una nueva invitación privada.',
+              icon: '✉️',
+              colspan: 4
+            });
+          }
+          return;
+        }
+
         data.invitations.forEach(inv => {
           const tr = document.createElement('tr');
 
@@ -533,6 +566,19 @@
         const res = await fetch('/api/v1/users');
         if (!res.ok) return;
         const data = await res.json();
+
+        // AUD-008: Renderizado de Estado Vacío en caso de lista vacía
+        if (!data.users || data.users.length === 0) {
+          if (typeof renderEmptyState === 'function') {
+            renderEmptyState(tbody, {
+              title: 'Directorio de usuarios vacío',
+              description: 'No se encontraron usuarios registrados en la organización.',
+              icon: '👥',
+              colspan: 5
+            });
+          }
+          return;
+        }
 
         data.users.forEach(u => {
           const tr = document.createElement('tr');

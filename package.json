@@ -1,11 +1,11 @@
 {
   "name": "politica-canon",
-  "version": "0.3.30",
-  "description": "Monolito Fastify, Identidad, Invitaciones Privadas, Usuarios, Sesiones y RBAC/ABAC — Política Canon v0.3.30 (Fase 1.1 Funcional Remediada Certificada)",
+  "version": "0.4.0-alpha.1",
+  "description": "Monolito Fastify, Identidad, Invitaciones Privadas, Usuarios, Sesiones y RBAC/ABAC — Política Canon v0.4.0-alpha.1 (Fase A Foundations UI)",
   "type": "module",
   "main": "dist/server.js",
   "scripts": {
-    "build": "tsc --build",
+    "build": "tsc --build && node -e \"import('fs').then(fs => fs.cpSync('public', 'dist/public', {recursive: true}))\"",
     "start": "node dist/server.js",
     "dev": "tsx watch src/server.ts",
     "typecheck": "tsc --noEmit",

@@ -14,11 +14,11 @@
       --card-bg: rgba(22, 27, 34, 0.85);
       --border-color: rgba(48, 54, 61, 0.8);
       --text-main: #f0f6fc;
-      --text-muted: #8b949e;
-      --accent-blue: #58a6ff;
-      --accent-emerald: #3fb950;
-      --accent-amber: #d29922;
-      --accent-red: #f85149;
+      --text-muted: #94a3b8; /* AUD-006: Contraste optimizado WCAG AAA (>7:1) */
+      --accent-blue: #38bdf8;
+      --accent-emerald: #4ade80;
+      --accent-amber: #fbbf24;
+      --accent-red: #f87171;
       --font-family: 'Inter', system-ui, -apple-system, sans-serif;
     }
 
@@ -34,8 +34,8 @@
       align-items: center;
       padding: 2rem 1rem;
       background-image: 
-        radial-gradient(at 20% 20%, rgba(88, 166, 255, 0.08) 0px, transparent 50%),
-        radial-gradient(at 80% 80%, rgba(63, 185, 80, 0.05) 0px, transparent 50%);
+        radial-gradient(at 20% 20%, rgba(56, 189, 248, 0.08) 0px, transparent 50%),
+        radial-gradient(at 80% 80%, rgba(74, 222, 128, 0.05) 0px, transparent 50%);
     }
 
     .container { max-width: 800px; width: 100%; }
@@ -54,8 +54,8 @@
       display: inline-flex;
       align-items: center;
       gap: 0.5rem;
-      background: rgba(63, 185, 80, 0.12);
-      border: 1px solid rgba(63, 185, 80, 0.3);
+      background: rgba(74, 222, 128, 0.12);
+      border: 1px solid rgba(74, 222, 128, 0.3);
       color: var(--accent-emerald);
       padding: 0.35rem 0.85rem;
       border-radius: 9999px;
@@ -88,7 +88,14 @@
     }
 
     .tab-btn:hover { color: var(--text-main); background: rgba(255, 255, 255, 0.05); }
-    .tab-btn.active { color: var(--accent-blue); background: rgba(88, 166, 255, 0.1); border-color: rgba(88, 166, 255, 0.3); }
+    .tab-btn.active { color: var(--accent-blue); background: rgba(56, 189, 248, 0.1); border-color: rgba(56, 189, 248, 0.3); }
+
+    /* AUD-006: Anillo de Foco de Alto Contraste para Accesibilidad Teclado */
+    :focus-visible {
+      outline: 2px solid var(--accent-blue) !important;
+      outline-offset: 2px !important;
+      box-shadow: 0 0 0 4px rgba(56, 189, 248, 0.25) !important;
+    }
 
     .form-group { margin-bottom: 1.25rem; }
     label { display: block; font-size: 0.85rem; font-weight: 600; margin-bottom: 0.5rem; color: var(--text-muted); }
@@ -106,14 +113,16 @@
       cursor: pointer; transition: opacity 0.2s; margin-top: 0.5rem;
     }
     .btn-primary:hover { opacity: 0.9; }
+    .btn-primary:disabled { opacity: 0.6; cursor: not-allowed; }
 
     .btn-danger {
       background: rgba(248, 81, 73, 0.15); color: var(--accent-red); border: 1px solid rgba(248, 81, 73, 0.3);
       font-weight: 600; cursor: pointer; padding: 0.4rem 0.8rem; border-radius: 6px; width: auto;
     }
     .btn-danger:hover { background: rgba(248, 81, 73, 0.25); }
+    .btn-danger:disabled { opacity: 0.5; cursor: not-allowed; }
 
-    .table-container { width: 100%; overflow-x: auto; margin-top: 1rem; }
+    .table-container { width: 100%; overflow-x: auto; margin-top: 1rem; -webkit-overflow-scrolling: touch; }
     table { width: 100%; border-collapse: collapse; text-align: left; font-size: 0.875rem; }
     th, td { padding: 0.75rem 1rem; border-bottom: 1px solid var(--border-color); }
     th { color: var(--text-muted); font-weight: 600; }
@@ -122,9 +131,31 @@
       padding: 0.75rem 1rem; border-radius: 8px; font-size: 0.875rem; margin-bottom: 1rem; display: none;
     }
     .alert-error { background: rgba(248, 81, 73, 0.1); border: 1px solid rgba(248, 81, 73, 0.3); color: var(--accent-red); }
-    .alert-success { background: rgba(63, 185, 80, 0.1); border: 1px solid rgba(63, 185, 80, 0.3); color: var(--accent-emerald); }
+    .alert-success { background: rgba(74, 222, 128, 0.1); border: 1px solid rgba(74, 222, 128, 0.3); color: var(--accent-emerald); }
 
     .footer { text-align: center; font-size: 0.78rem; color: var(--text-muted); margin-top: 2rem; }
+
+    /* AUD-004: Reglas Responsive para Dispositivos Móviles */
+    @media (max-width: 640px) {
+      body { padding: 1rem 0.5rem; }
+      .card { padding: 1.25rem 1rem; border-radius: 12px; }
+      .nav-tabs {
+        gap: 0.25rem; overflow-x: auto; flex-wrap: nowrap; padding-bottom: 0.5rem;
+        -webkit-overflow-scrolling: touch; scrollbar-width: none;
+      }
+      .nav-tabs::-webkit-scrollbar { display: none; }
+      .tab-btn { padding: 0.45rem 0.75rem; font-size: 0.8rem; flex-shrink: 0; }
+      table { font-size: 0.8rem; }
+      th, td { padding: 0.5rem 0.6rem; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, ::before, ::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+      }
+    }
   </style>
 </head>
 <body>
@@ -133,22 +164,24 @@
       <div class="header-badge">
         <span class="status-dot"></span> Intranet Segura · Nginx Gateway HTTPS
       </div>
-      <h1>Política Canon v0.3.30</h1>
+      <h1>Política Canon v0.4.0-alpha.1</h1>
       <p class="subtitle">Plataforma Canónica de Gobernanza, Identidad Privada y Auditoría Inmutable.</p>
 
-      <div class="nav-tabs" id="navTabs">
-        <button class="tab-btn active" onclick="showTab('loginTab')">Inicio de Sesión</button>
-        <button class="tab-btn" onclick="showTab('acceptTab')">Aceptar Invitación</button>
-        <button class="tab-btn" onclick="showTab('profileTab')">Mi Perfil</button>
-        <button class="tab-btn" onclick="showTab('sessionsTab')">Sesiones Activas</button>
-        <button class="tab-btn" onclick="showTab('invitationsTab')">Invitaciones</button>
-        <button class="tab-btn" onclick="showTab('usersTab')">Usuarios</button>
+      <!-- AUD-001: Estructura WAI-ARIA para Pestañas -->
+      <div class="nav-tabs" id="navTabs" role="tablist" aria-label="Secciones de la Intranet">
+        <button class="tab-btn active" id="tab-login" role="tab" aria-selected="true" aria-controls="loginTab" tabindex="0" onclick="showTab('loginTab', event)">Inicio de Sesión</button>
+        <button class="tab-btn" id="tab-accept" role="tab" aria-selected="false" aria-controls="acceptTab" tabindex="-1" onclick="showTab('acceptTab', event)">Aceptar Invitación</button>
+        <button class="tab-btn" id="tab-profile" role="tab" aria-selected="false" aria-controls="profileTab" tabindex="-1" onclick="showTab('profileTab', event)">Mi Perfil</button>
+        <button class="tab-btn" id="tab-sessions" role="tab" aria-selected="false" aria-controls="sessionsTab" tabindex="-1" onclick="showTab('sessionsTab', event)">Sesiones Activas</button>
+        <button class="tab-btn" id="tab-invitations" role="tab" aria-selected="false" aria-controls="invitationsTab" tabindex="-1" onclick="showTab('invitationsTab', event)">Invitaciones</button>
+        <button class="tab-btn" id="tab-users" role="tab" aria-selected="false" aria-controls="usersTab" tabindex="-1" onclick="showTab('usersTab', event)">Usuarios</button>
       </div>
 
-      <div id="alertBox" class="alert"></div>
+      <!-- AUD-009: Región ARIA Live para Alertas -->
+      <div id="alertBox" class="alert" role="status" aria-live="polite"></div>
 
       <!-- Tab: Login -->
-      <div id="loginTab" class="tab-content">
+      <div id="loginTab" class="tab-content" role="tabpanel" tabindex="0" aria-labelledby="tab-login">
         <form id="loginForm" onsubmit="handleLogin(event)">
           <div class="form-group">
             <label for="loginEmail">Correo Electrónico</label>
@@ -158,12 +191,12 @@
             <label for="loginPassword">Contraseña</label>
             <input type="password" id="loginPassword" required placeholder="••••••••••••">
           </div>
-          <button type="submit" class="btn-primary">Iniciar Sesión</button>
+          <button type="submit" id="loginSubmitBtn" class="btn-primary">Iniciar Sesión</button>
         </form>
       </div>
 
       <!-- Tab: Accept Invitation -->
-      <div id="acceptTab" class="tab-content" style="display:none;">
+      <div id="acceptTab" class="tab-content" role="tabpanel" tabindex="0" aria-labelledby="tab-accept" style="display:none;">
         <form id="acceptForm" onsubmit="handleAcceptInvitation(event)">
           <div class="form-group">
             <label for="inviteToken">Token de Invitación (256-bit)</label>
@@ -177,30 +210,30 @@
             <label for="invitePassword">Nueva Contraseña (Política Fuerte)</label>
             <input type="password" id="invitePassword" required placeholder="••••••••••••">
           </div>
-          <button type="submit" class="btn-primary">Activar Cuenta</button>
+          <button type="submit" id="acceptSubmitBtn" class="btn-primary">Activar Cuenta</button>
         </form>
       </div>
 
       <!-- Tab: Profile -->
-      <div id="profileTab" class="tab-content" style="display:none;">
+      <div id="profileTab" class="tab-content" role="tabpanel" tabindex="0" aria-labelledby="tab-profile" style="display:none;">
         <div id="profileContent">Cargando perfil...</div>
       </div>
 
       <!-- Tab: Sessions -->
-      <div id="sessionsTab" class="tab-content" style="display:none;">
+      <div id="sessionsTab" class="tab-content" role="tabpanel" tabindex="0" aria-labelledby="tab-sessions" style="display:none;">
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem;">
           <h3>Sesiones Activas en la Cuenta</h3>
-          <button class="btn-danger" onclick="handleRevokeAllOtherSessions()">Revocar Todas las Demás</button>
+          <button class="btn-danger" id="revokeAllBtn" onclick="handleRevokeAllOtherSessions()">Revocar Todas las Demás</button>
         </div>
         <div class="table-container">
           <table id="sessionsTable">
             <thead>
               <tr>
-                <th>Dirección IP</th>
-                <th>Dispositivo / User-Agent</th>
-                <th>Creada</th>
-                <th>Estado</th>
-                <th>Acción</th>
+                <th scope="col">Dirección IP</th>
+                <th scope="col">Dispositivo / User-Agent</th>
+                <th scope="col">Creada</th>
+                <th scope="col">Estado</th>
+                <th scope="col">Acción</th>
               </tr>
             </thead>
             <tbody id="sessionsTableBody"></tbody>
@@ -209,7 +242,7 @@
       </div>
 
       <!-- Tab: Invitations -->
-      <div id="invitationsTab" class="tab-content" style="display:none;">
+      <div id="invitationsTab" class="tab-content" role="tabpanel" tabindex="0" aria-labelledby="tab-invitations" style="display:none;">
         <h3>Emitir Nueva Invitación Privada</h3>
         <form id="inviteForm" onsubmit="handleCreateInvitation(event)" style="margin-top:1rem; margin-bottom:2rem;">
           <div class="form-group">
@@ -223,7 +256,7 @@
               <option value="COORDINATOR">Coordinador (COORDINATOR)</option>
             </select>
           </div>
-          <button type="submit" class="btn-primary">Emitir e Enviar Invitación por Correo</button>
+          <button type="submit" id="createInviteBtn" class="btn-primary">Emitir e Enviar Invitación por Correo</button>
         </form>
 
         <h3>Invitaciones Emitidas Pendientes</h3>
@@ -231,10 +264,10 @@
           <table id="invitationsTable">
             <thead>
               <tr>
-                <th>Email</th>
-                <th>Rol</th>
-                <th>Expiración</th>
-                <th>Acción</th>
+                <th scope="col">Email</th>
+                <th scope="col">Rol</th>
+                <th scope="col">Expiración</th>
+                <th scope="col">Acción</th>
               </tr>
             </thead>
             <tbody id="invitationsTableBody"></tbody>
@@ -243,17 +276,17 @@
       </div>
 
       <!-- Tab: Users -->
-      <div id="usersTab" class="tab-content" style="display:none;">
+      <div id="usersTab" class="tab-content" role="tabpanel" tabindex="0" aria-labelledby="tab-users" style="display:none;">
         <h3>Usuarios de la Organización</h3>
         <div class="table-container">
           <table id="usersTable">
             <thead>
               <tr>
-                <th>Nombre Completo</th>
-                <th>Correo Electrónico</th>
-                <th>Estado</th>
-                <th>MFA</th>
-                <th>Acción</th>
+                <th scope="col">Nombre Completo</th>
+                <th scope="col">Correo Electrónico</th>
+                <th scope="col">Estado</th>
+                <th scope="col">MFA</th>
+                <th scope="col">Acción</th>
               </tr>
             </thead>
             <tbody id="usersTableBody"></tbody>
@@ -264,7 +297,7 @@
     </div>
 
     <div class="footer">
-      Política Canon v0.3.30 — Sistema Canónico de Gobernanza y Auditoría Inmutable
+      Política Canon v0.4.0-alpha.1 — Sistema Canónico de Gobernanza y Auditoría Inmutable
     </div>
   </div>
 
@@ -282,13 +315,43 @@
       document.getElementById('alertBox').style.display = 'none';
     }
 
-    function showTab(tabId) {
+    // AUD-003: Helper para Estado de Carga e Inhabilitación de Botones
+    function setButtonLoading(btn, isLoading, loadingText = 'Procesando...') {
+      if (!btn) return;
+      if (isLoading) {
+        btn.dataset.originalText = btn.textContent;
+        btn.textContent = loadingText;
+        btn.disabled = true;
+        btn.setAttribute('aria-busy', 'true');
+      } else {
+        if (btn.dataset.originalText) btn.textContent = btn.dataset.originalText;
+        btn.disabled = false;
+        btn.removeAttribute('aria-busy');
+      }
+    }
+
+    // AUD-001: Navegación y Atributos WAI-ARIA en Pestañas
+    function showTab(tabId, evt) {
       hideAlert();
       document.querySelectorAll('.tab-content').forEach(el => el.style.display = 'none');
-      document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+      document.querySelectorAll('.tab-btn').forEach(btn => {
+        btn.classList.remove('active');
+        btn.setAttribute('aria-selected', 'false');
+        btn.setAttribute('tabindex', '-1');
+      });
       
-      document.getElementById(tabId).style.display = 'block';
-      event.target.classList.add('active');
+      const targetPanel = document.getElementById(tabId);
+      if (targetPanel) targetPanel.style.display = 'block';
+
+      let targetBtn = evt ? (evt.currentTarget || evt.target) : null;
+      if (!targetBtn) {
+        targetBtn = document.querySelector(`.tab-btn[aria-controls="${tabId}"]`);
+      }
+      if (targetBtn) {
+        targetBtn.classList.add('active');
+        targetBtn.setAttribute('aria-selected', 'true');
+        targetBtn.setAttribute('tabindex', '0');
+      }
 
       if (tabId === 'sessionsTab') loadSessions();
       if (tabId === 'invitationsTab') loadInvitations();
@@ -296,11 +359,45 @@
       if (tabId === 'profileTab') loadProfile();
     }
 
+    // AUD-001: Navegación por Teclado (Flechas Izquierda / Derecha, Home, End)
+    document.addEventListener('DOMContentLoaded', () => {
+      const tablist = document.getElementById('navTabs');
+      if (!tablist) return;
+
+      tablist.addEventListener('keydown', (e) => {
+        const tabs = Array.from(tablist.querySelectorAll('.tab-btn'));
+        const currentIndex = tabs.indexOf(document.activeElement);
+
+        if (currentIndex === -1) return;
+
+        let newIndex = currentIndex;
+        if (e.key === 'ArrowRight') {
+          newIndex = (currentIndex + 1) % tabs.length;
+        } else if (e.key === 'ArrowLeft') {
+          newIndex = (currentIndex - 1 + tabs.length) % tabs.length;
+        } else if (e.key === 'Home') {
+          newIndex = 0;
+        } else if (e.key === 'End') {
+          newIndex = tabs.length - 1;
+        } else {
+          return;
+        }
+
+        e.preventDefault();
+        tabs[newIndex].focus();
+        const tabControls = tabs[newIndex].getAttribute('aria-controls');
+        showTab(tabControls, { currentTarget: tabs[newIndex] });
+      });
+    });
+
     async function handleLogin(e) {
       e.preventDefault();
       hideAlert();
+      const submitBtn = document.getElementById('loginSubmitBtn');
       const email = document.getElementById('loginEmail').value;
       const password = document.getElementById('loginPassword').value;
+
+      setButtonLoading(submitBtn, true, 'Iniciando Sesión...');
 
       try {
         const res = await fetch('/api/v1/auth/login', {
@@ -316,15 +413,20 @@
         showTab('profileTab');
       } catch (err) {
         showAlert(err.message, true);
+      } finally {
+        setButtonLoading(submitBtn, false);
       }
     }
 
     async function handleAcceptInvitation(e) {
       e.preventDefault();
       hideAlert();
+      const submitBtn = document.getElementById('acceptSubmitBtn');
       const token = document.getElementById('inviteToken').value;
       const fullName = document.getElementById('inviteName').value;
       const password = document.getElementById('invitePassword').value;
+
+      setButtonLoading(submitBtn, true, 'Activando Cuenta...');
 
       try {
         const res = await fetch('/api/v1/invitations/accept', {
@@ -338,6 +440,8 @@
         showAlert('Cuenta activada exitosamente. Ya puede iniciar sesión.');
       } catch (err) {
         showAlert(err.message, true);
+      } finally {
+        setButtonLoading(submitBtn, false);
       }
     }
 
@@ -492,8 +596,11 @@
     async function handleCreateInvitation(e) {
       e.preventDefault();
       hideAlert();
+      const submitBtn = document.getElementById('createInviteBtn');
       const email = document.getElementById('newInviteEmail').value;
       const role = document.getElementById('newInviteRole').value;
+
+      setButtonLoading(submitBtn, true, 'Emitiendo Invitación...');
 
       try {
         const res = await fetch('/api/v1/invitations', {
@@ -511,6 +618,8 @@
         loadInvitations();
       } catch (err) {
         showAlert(err.message, true);
+      } finally {
+        setButtonLoading(submitBtn, false);
       }
     }
 

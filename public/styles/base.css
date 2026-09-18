@@ -1,0 +1,62 @@
+/* Política Canon v0.4.0-alpha.2 — Estilos Base y Accesibilidad */
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background-color: var(--canon-bg-app);
+  color: var(--canon-text-primary);
+  font-family: var(--font-sans);
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: var(--space-8) var(--space-4);
+  background-image: 
+    radial-gradient(at 20% 20%, rgba(56, 189, 248, 0.08) 0px, transparent 50%),
+    radial-gradient(at 80% 80%, rgba(74, 222, 128, 0.05) 0px, transparent 50%);
+}
+
+h1 {
+  font-size: 1.65rem;
+  font-weight: 700;
+  margin-bottom: var(--space-2);
+}
+
+h3 {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--canon-text-primary);
+}
+
+p.subtitle {
+  color: var(--canon-text-muted);
+  font-size: 0.95rem;
+  line-height: 1.6;
+  margin-bottom: var(--space-6);
+}
+
+/* AUD-006: Anillo de Foco de Alto Contraste para Accesibilidad Teclado */
+:focus-visible {
+  outline: 2px solid var(--canon-focus-ring) !important;
+  outline-offset: 2px !important;
+  box-shadow: 0 0 0 4px rgba(56, 189, 248, 0.25) !important;
+}
+
+.footer {
+  text-align: center;
+  font-size: 0.78rem;
+  color: var(--canon-text-muted);
+  margin-top: var(--space-8);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, ::before, ::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

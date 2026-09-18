@@ -1,0 +1,260 @@
+/* Política Canon v0.4.0-alpha.2 — Estilos de Componentes Reutilizables */
+
+/* Badge y Estatus */
+.header-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  background: var(--canon-state-success-bg);
+  border: 1px solid rgba(74, 222, 128, 0.3);
+  color: var(--canon-state-success);
+  padding: 0.35rem 0.85rem;
+  border-radius: var(--radius-full);
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  margin-bottom: var(--space-6);
+}
+
+.status-dot {
+  width: 8px;
+  height: 8px;
+  background-color: var(--canon-state-success);
+  border-radius: 50%;
+  box-shadow: 0 0 10px var(--canon-state-success);
+}
+
+/* Tabs */
+.nav-tabs {
+  display: flex;
+  gap: var(--space-2);
+  margin-bottom: var(--space-6);
+  flex-wrap: wrap;
+  border-bottom: 1px solid var(--canon-border-default);
+  padding-bottom: var(--space-3);
+}
+
+.tab-btn {
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--canon-text-secondary);
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--radius-md);
+  font-weight: 500;
+  font-size: 0.875rem;
+  cursor: pointer;
+  transition: all 0.2s ease-out;
+}
+
+.tab-btn:hover {
+  color: var(--canon-text-primary);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.tab-btn.active {
+  color: var(--canon-interactive-primary);
+  background: rgba(56, 189, 248, 0.1);
+  border-color: rgba(56, 189, 248, 0.3);
+}
+
+/* Formularios: Input, Select, Label */
+.form-group {
+  margin-bottom: var(--space-5);
+}
+
+label {
+  display: block;
+  font-size: 0.85rem;
+  font-weight: 600;
+  margin-bottom: var(--space-2);
+  color: var(--canon-text-secondary);
+}
+
+input, select, button {
+  width: 100%;
+  padding: 0.75rem var(--space-4);
+  border-radius: var(--radius-md);
+  font-size: 0.9rem;
+  font-family: inherit;
+}
+
+input, select {
+  background: rgba(13, 17, 23, 0.7);
+  border: 1px solid var(--canon-border-default);
+  color: var(--canon-text-primary);
+}
+
+input:focus, select:focus {
+  outline: none;
+  border-color: var(--canon-interactive-primary);
+}
+
+/* Botones */
+.btn-primary {
+  background: var(--canon-interactive-primary);
+  color: var(--canon-bg-app);
+  border: none;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.2s ease-out;
+  margin-top: var(--space-2);
+}
+
+.btn-primary:hover {
+  background: var(--canon-interactive-primary-hover);
+}
+
+.btn-primary:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.btn-danger {
+  background: var(--canon-state-danger-bg);
+  color: var(--canon-state-danger);
+  border: 1px solid rgba(248, 81, 73, 0.3);
+  font-weight: 600;
+  cursor: pointer;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  width: auto;
+}
+
+.btn-danger:hover {
+  background: rgba(248, 81, 73, 0.25);
+}
+
+.btn-danger:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn-secondary {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--canon-text-primary);
+  border: 1px solid var(--canon-border-default);
+  font-weight: 500;
+  cursor: pointer;
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--radius-md);
+  width: auto;
+}
+
+.btn-secondary:hover {
+  background: rgba(255, 255, 255, 0.14);
+}
+
+/* Tablas */
+.table-container {
+  width: 100%;
+  overflow-x: auto;
+  margin-top: var(--space-4);
+  -webkit-overflow-scrolling: touch;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+  font-size: 0.875rem;
+}
+
+th, td {
+  padding: 0.75rem var(--space-4);
+  border-bottom: 1px solid var(--canon-border-default);
+}
+
+th {
+  color: var(--canon-text-secondary);
+  font-weight: 600;
+}
+
+/* Alertas y Feedback */
+.alert {
+  padding: 0.75rem var(--space-4);
+  border-radius: var(--radius-md);
+  font-size: 0.875rem;
+  margin-bottom: var(--space-4);
+  display: none;
+}
+
+.alert-error {
+  background: var(--canon-state-danger-bg);
+  border: 1px solid rgba(248, 81, 73, 0.3);
+  color: var(--canon-state-danger);
+}
+
+.alert-success {
+  background: var(--canon-state-success-bg);
+  border: 1px solid rgba(74, 222, 128, 0.3);
+  color: var(--canon-state-success);
+}
+
+/* B1: Componente ConfirmDialog (Modal de Acciones Destructivas Accesible) */
+.dialog-overlay {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0, 0, 0, 0.75);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: var(--space-4);
+}
+
+.dialog-box {
+  background: var(--canon-surface-elevated);
+  border: 1px solid var(--canon-border-default);
+  border-radius: var(--radius-lg);
+  max-width: 520px;
+  width: 100%;
+  padding: var(--space-6);
+  box-shadow: 0 24px 48px rgba(0, 0, 0, 0.6);
+}
+
+.dialog-header {
+  margin-bottom: var(--space-4);
+}
+
+.dialog-header h3 {
+  font-size: 1.25rem;
+  color: var(--canon-text-primary);
+  margin-bottom: var(--space-2);
+}
+
+.dialog-body {
+  font-size: 0.9rem;
+  line-height: 1.5;
+  color: var(--canon-text-secondary);
+  margin-bottom: var(--space-6);
+}
+
+.dialog-body strong {
+  color: var(--canon-text-primary);
+}
+
+.dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-3);
+}
+
+/* Mobile Component Responsive */
+@media (max-width: 640px) {
+  .nav-tabs {
+    gap: var(--space-1);
+    overflow-x: auto;
+    flex-wrap: nowrap;
+    padding-bottom: var(--space-2);
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+  .nav-tabs::-webkit-scrollbar { display: none; }
+  .tab-btn { padding: 0.45rem 0.75rem; font-size: 0.8rem; flex-shrink: 0; }
+  table { font-size: 0.8rem; }
+  th, td { padding: 0.5rem 0.6rem; }
+  .dialog-actions { flex-direction: column-reverse; }
+  .dialog-actions button { width: 100%; }
+}

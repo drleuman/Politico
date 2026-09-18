@@ -8,163 +8,22 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <style>
-    :root {
-      --bg-color: #0d1117;
-      --card-bg: rgba(22, 27, 34, 0.85);
-      --border-color: rgba(48, 54, 61, 0.8);
-      --text-main: #f0f6fc;
-      --text-muted: #94a3b8; /* AUD-006: Contraste optimizado WCAG AAA (>7:1) */
-      --accent-blue: #38bdf8;
-      --accent-emerald: #4ade80;
-      --accent-amber: #fbbf24;
-      --accent-red: #f87171;
-      --font-family: 'Inter', system-ui, -apple-system, sans-serif;
-    }
-
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-
-    body {
-      background-color: var(--bg-color);
-      color: var(--text-main);
-      font-family: var(--font-family);
-      min-height: 100vh;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      padding: 2rem 1rem;
-      background-image: 
-        radial-gradient(at 20% 20%, rgba(56, 189, 248, 0.08) 0px, transparent 50%),
-        radial-gradient(at 80% 80%, rgba(74, 222, 128, 0.05) 0px, transparent 50%);
-    }
-
-    .container { max-width: 800px; width: 100%; }
-
-    .card {
-      background: var(--card-bg);
-      backdrop-filter: blur(16px);
-      border: 1px solid var(--border-color);
-      border-radius: 16px;
-      padding: 2.5rem;
-      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
-      margin-bottom: 1.5rem;
-    }
-
-    .header-badge {
-      display: inline-flex;
-      align-items: center;
-      gap: 0.5rem;
-      background: rgba(74, 222, 128, 0.12);
-      border: 1px solid rgba(74, 222, 128, 0.3);
-      color: var(--accent-emerald);
-      padding: 0.35rem 0.85rem;
-      border-radius: 9999px;
-      font-size: 0.78rem;
-      font-weight: 600;
-      letter-spacing: 0.04em;
-      text-transform: uppercase;
-      margin-bottom: 1.5rem;
-    }
-
-    .status-dot {
-      width: 8px; height: 8px;
-      background-color: var(--accent-emerald);
-      border-radius: 50%;
-      box-shadow: 0 0 10px var(--accent-emerald);
-    }
-
-    h1 { font-size: 1.65rem; font-weight: 700; margin-bottom: 0.5rem; }
-    p.subtitle { color: var(--text-muted); font-size: 0.95rem; line-height: 1.6; margin-bottom: 1.5rem; }
-
-    .nav-tabs {
-      display: flex; gap: 0.5rem; margin-bottom: 1.5rem; flex-wrap: wrap;
-      border-bottom: 1px solid var(--border-color); padding-bottom: 0.75rem;
-    }
-
-    .tab-btn {
-      background: transparent; border: 1px solid transparent; color: var(--text-muted);
-      padding: 0.5rem 1rem; border-radius: 8px; font-weight: 500; font-size: 0.875rem;
-      cursor: pointer; transition: all 0.2s;
-    }
-
-    .tab-btn:hover { color: var(--text-main); background: rgba(255, 255, 255, 0.05); }
-    .tab-btn.active { color: var(--accent-blue); background: rgba(56, 189, 248, 0.1); border-color: rgba(56, 189, 248, 0.3); }
-
-    /* AUD-006: Anillo de Foco de Alto Contraste para Accesibilidad Teclado */
-    :focus-visible {
-      outline: 2px solid var(--accent-blue) !important;
-      outline-offset: 2px !important;
-      box-shadow: 0 0 0 4px rgba(56, 189, 248, 0.25) !important;
-    }
-
-    .form-group { margin-bottom: 1.25rem; }
-    label { display: block; font-size: 0.85rem; font-weight: 600; margin-bottom: 0.5rem; color: var(--text-muted); }
-    input, select, button {
-      width: 100%; padding: 0.75rem 1rem; border-radius: 8px; font-size: 0.9rem;
-      font-family: inherit;
-    }
-    input, select {
-      background: rgba(13, 17, 23, 0.7); border: 1px solid var(--border-color); color: var(--text-main);
-    }
-    input:focus, select:focus { outline: none; border-color: var(--accent-blue); }
-
-    .btn-primary {
-      background: var(--accent-blue); color: #0d1117; border: none; font-weight: 600;
-      cursor: pointer; transition: opacity 0.2s; margin-top: 0.5rem;
-    }
-    .btn-primary:hover { opacity: 0.9; }
-    .btn-primary:disabled { opacity: 0.6; cursor: not-allowed; }
-
-    .btn-danger {
-      background: rgba(248, 81, 73, 0.15); color: var(--accent-red); border: 1px solid rgba(248, 81, 73, 0.3);
-      font-weight: 600; cursor: pointer; padding: 0.4rem 0.8rem; border-radius: 6px; width: auto;
-    }
-    .btn-danger:hover { background: rgba(248, 81, 73, 0.25); }
-    .btn-danger:disabled { opacity: 0.5; cursor: not-allowed; }
-
-    .table-container { width: 100%; overflow-x: auto; margin-top: 1rem; -webkit-overflow-scrolling: touch; }
-    table { width: 100%; border-collapse: collapse; text-align: left; font-size: 0.875rem; }
-    th, td { padding: 0.75rem 1rem; border-bottom: 1px solid var(--border-color); }
-    th { color: var(--text-muted); font-weight: 600; }
-
-    .alert {
-      padding: 0.75rem 1rem; border-radius: 8px; font-size: 0.875rem; margin-bottom: 1rem; display: none;
-    }
-    .alert-error { background: rgba(248, 81, 73, 0.1); border: 1px solid rgba(248, 81, 73, 0.3); color: var(--accent-red); }
-    .alert-success { background: rgba(74, 222, 128, 0.1); border: 1px solid rgba(74, 222, 128, 0.3); color: var(--accent-emerald); }
-
-    .footer { text-align: center; font-size: 0.78rem; color: var(--text-muted); margin-top: 2rem; }
-
-    /* AUD-004: Reglas Responsive para Dispositivos Móviles */
-    @media (max-width: 640px) {
-      body { padding: 1rem 0.5rem; }
-      .card { padding: 1.25rem 1rem; border-radius: 12px; }
-      .nav-tabs {
-        gap: 0.25rem; overflow-x: auto; flex-wrap: nowrap; padding-bottom: 0.5rem;
-        -webkit-overflow-scrolling: touch; scrollbar-width: none;
-      }
-      .nav-tabs::-webkit-scrollbar { display: none; }
-      .tab-btn { padding: 0.45rem 0.75rem; font-size: 0.8rem; flex-shrink: 0; }
-      table { font-size: 0.8rem; }
-      th, td { padding: 0.5rem 0.6rem; }
-    }
-
-    @media (prefers-reduced-motion: reduce) {
-      *, ::before, ::after {
-        animation-duration: 0.01ms !important;
-        animation-iteration-count: 1 !important;
-        transition-duration: 0.01ms !important;
-      }
-    }
-  </style>
+  
+  <!-- B3: Extracción Determinista de Estilos Modularizados (Tokens, Base, Layout, Componentes) -->
+  <link rel="stylesheet" href="/styles/tokens.css">
+  <link rel="stylesheet" href="/styles/base.css">
+  <link rel="stylesheet" href="/styles/layout.css">
+  <link rel="stylesheet" href="/styles/components.css">
+  <script src="/js/confirm-dialog.js"></script>
 </head>
 <body>
-  <div class="container">
+  <!-- B2: Arquitectura de Layout Dinámico por Categoría -->
+  <div class="container layout-auth" id="mainContainer">
     <div class="card">
       <div class="header-badge">
         <span class="status-dot"></span> Intranet Segura · Nginx Gateway HTTPS
       </div>
-      <h1>Política Canon v0.4.0-alpha.1</h1>
+      <h1>Política Canon v0.4.0-alpha.2</h1>
       <p class="subtitle">Plataforma Canónica de Gobernanza, Identidad Privada y Auditoría Inmutable.</p>
 
       <!-- AUD-001: Estructura WAI-ARIA para Pestañas -->
@@ -223,7 +82,7 @@
       <div id="sessionsTab" class="tab-content" role="tabpanel" tabindex="0" aria-labelledby="tab-sessions" style="display:none;">
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem;">
           <h3>Sesiones Activas en la Cuenta</h3>
-          <button class="btn-danger" id="revokeAllBtn" onclick="handleRevokeAllOtherSessions()">Revocar Todas las Demás</button>
+          <button class="btn-danger" id="revokeAllBtn" onclick="handleRevokeAllOtherSessions(event)">Revocar Todas las Demás</button>
         </div>
         <div class="table-container">
           <table id="sessionsTable">
@@ -243,30 +102,30 @@
 
       <!-- Tab: Invitations -->
       <div id="invitationsTab" class="tab-content" role="tabpanel" tabindex="0" aria-labelledby="tab-invitations" style="display:none;">
-        <h3>Emitir Nueva Invitación Privada</h3>
-        <form id="inviteForm" onsubmit="handleCreateInvitation(event)" style="margin-top:1rem; margin-bottom:2rem;">
+        <h3>Emitir Nueva Invitación</h3>
+        <form id="createInviteForm" onsubmit="handleCreateInvitation(event)" style="margin-bottom:2rem;">
           <div class="form-group">
             <label for="newInviteEmail">Correo del Destinatario</label>
             <input type="email" id="newInviteEmail" required placeholder="nuevo.usuario@ejemplo.com">
           </div>
           <div class="form-group">
             <label for="newInviteRole">Rol Asignado</label>
-            <select id="newInviteRole">
-              <option value="MEMBER">Miembro (MEMBER)</option>
-              <option value="COORDINATOR">Coordinador (COORDINATOR)</option>
+            <select id="newInviteRole" style="width:100%; padding:0.75rem; border-radius:6px; border:1px solid var(--color-border); background:var(--color-bg); color:var(--color-text-primary);">
+              <option value="user">Usuario Estándar</option>
+              <option value="admin">Administrador</option>
             </select>
           </div>
-          <button type="submit" id="createInviteBtn" class="btn-primary">Emitir e Enviar Invitación por Correo</button>
+          <button type="submit" id="createInviteBtn" class="btn-primary">Generar e Invitar</button>
         </form>
 
-        <h3>Invitaciones Emitidas Pendientes</h3>
+        <h3>Invitaciones Pendientes / Emitidas</h3>
         <div class="table-container">
           <table id="invitationsTable">
             <thead>
               <tr>
-                <th scope="col">Email</th>
+                <th scope="col">Correo</th>
                 <th scope="col">Rol</th>
-                <th scope="col">Expiración</th>
+                <th scope="col">Expira</th>
                 <th scope="col">Acción</th>
               </tr>
             </thead>
@@ -277,13 +136,13 @@
 
       <!-- Tab: Users -->
       <div id="usersTab" class="tab-content" role="tabpanel" tabindex="0" aria-labelledby="tab-users" style="display:none;">
-        <h3>Usuarios de la Organización</h3>
+        <h3>Directorio de Usuarios del Sistema</h3>
         <div class="table-container">
           <table id="usersTable">
             <thead>
               <tr>
-                <th scope="col">Nombre Completo</th>
-                <th scope="col">Correo Electrónico</th>
+                <th scope="col">Nombre</th>
+                <th scope="col">Correo</th>
                 <th scope="col">Estado</th>
                 <th scope="col">MFA</th>
                 <th scope="col">Acción</th>
@@ -306,17 +165,18 @@
 
     function showAlert(msg, isError = false) {
       const box = document.getElementById('alertBox');
-      box.textContent = msg; // C-04: Seguro contra XSS (textContent)
-      box.className = 'alert ' + (isError ? 'alert-error' : 'alert-success');
+      box.textContent = msg;
+      box.className = 'alert ' + (isError ? 'alert-danger' : 'alert-success');
       box.style.display = 'block';
     }
 
     function hideAlert() {
-      document.getElementById('alertBox').style.display = 'none';
+      const box = document.getElementById('alertBox');
+      box.style.display = 'none';
     }
 
     // AUD-003: Helper para Estado de Carga e Inhabilitación de Botones
-    function setButtonLoading(btn, isLoading, loadingText = 'Procesando...') {
+    function setButtonLoading(btn, isLoading, loadingText = 'Cargando...') {
       if (!btn) return;
       if (isLoading) {
         btn.dataset.originalText = btn.textContent;
@@ -330,7 +190,7 @@
       }
     }
 
-    // AUD-001: Navegación y Atributos WAI-ARIA en Pestañas
+    // AUD-001 / B2: Navegación y Categorización Dinámica de Layout
     function showTab(tabId, evt) {
       hideAlert();
       document.querySelectorAll('.tab-content').forEach(el => el.style.display = 'none');
@@ -351,6 +211,21 @@
         targetBtn.classList.add('active');
         targetBtn.setAttribute('aria-selected', 'true');
         targetBtn.setAttribute('tabindex', '0');
+      }
+
+      // B2: Layout architecture by category
+      const mainContainer = document.getElementById('mainContainer');
+      if (mainContainer) {
+        mainContainer.className = 'container';
+        if (tabId === 'loginTab' || tabId === 'acceptTab') {
+          mainContainer.classList.add('layout-auth');
+        } else if (tabId === 'profileTab') {
+          mainContainer.classList.add('layout-content');
+        } else if (tabId === 'invitationsTab') {
+          mainContainer.classList.add('layout-admin');
+        } else if (tabId === 'sessionsTab' || tabId === 'usersTab') {
+          mainContainer.classList.add('layout-data-heavy');
+        }
       }
 
       if (tabId === 'sessionsTab') loadSessions();
@@ -437,7 +312,8 @@
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || 'Error al aceptar invitación');
         
-        showAlert('Cuenta activada exitosamente. Ya puede iniciar sesión.');
+        showAlert('Cuenta activada con éxito. Ya puedes iniciar sesión.');
+        showTab('loginTab');
       } catch (err) {
         showAlert(err.message, true);
       } finally {
@@ -447,34 +323,23 @@
 
     async function loadProfile() {
       const container = document.getElementById('profileContent');
-      container.textContent = ''; // Limpiar de forma segura
-
       try {
-        const res = await fetch('/api/v1/auth/me');
+        const res = await fetch('/api/v1/users/me');
         if (!res.ok) {
-          container.textContent = 'Requiere sesión autenticada.';
+          container.innerHTML = '<p class="text-muted">Debes iniciar sesión para ver tu perfil.</p>';
           return;
         }
-        const data = await res.json();
-        
-        // C-04: Construcción segura de DOM con textContent
-        const div = document.createElement('div');
-        
-        const p1 = document.createElement('p');
-        p1.textContent = 'Usuario: ' + data.user.fullName + ' (' + data.user.email + ')';
-        
-        const p2 = document.createElement('p');
-        p2.textContent = 'MFA Habilitado: ' + (data.user.mfaEnabled ? 'Sí' : 'No');
-
-        const p3 = document.createElement('p');
-        p3.textContent = 'Organización Activa: ' + data.session.organizationId;
-
-        div.appendChild(p1);
-        div.appendChild(p2);
-        div.appendChild(p3);
-        container.appendChild(div);
+        const user = await res.json();
+        container.innerHTML = `
+          <div style="background:var(--color-bg); padding:1rem; border-radius:6px; border:1px solid var(--color-border);">
+            <p><strong>Nombre:</strong> ${user.fullName}</p>
+            <p><strong>Correo:</strong> ${user.email}</p>
+            <p><strong>Rol:</strong> <span class="badge badge-info">${user.role}</span></p>
+            <p><strong>MFA Activado:</strong> ${user.mfaEnabled ? 'Sí' : 'No'}</p>
+          </div>
+        `;
       } catch (err) {
-        container.textContent = 'Error al cargar perfil.';
+        container.innerHTML = '<p class="text-danger">Error al cargar perfil.</p>';
       }
     }
 
@@ -508,7 +373,7 @@
             const btn = document.createElement('button');
             btn.className = 'btn-danger';
             btn.textContent = 'Revocar';
-            btn.onclick = () => handleRevokeSession(s.id);
+            btn.onclick = (e) => handleRevokeSession(s.id, e.currentTarget);
             tdAction.appendChild(btn);
           } else {
             tdAction.textContent = '-';
@@ -526,32 +391,48 @@
       }
     }
 
-    async function handleRevokeSession(sessionId) {
-      try {
-        const res = await fetch('/api/v1/sessions/' + sessionId, {
-          method: 'DELETE',
-          headers: { 'x-csrf-token': csrfToken }
-        });
-        if (!res.ok) throw new Error('Error al revocar sesión');
-        showAlert('Sesión revocada exitosamente.');
-        loadSessions();
-      } catch (err) {
-        showAlert(err.message, true);
-      }
+    // B1: Acciones Destructivas Accesibles via ConfirmDialog
+    function handleRevokeSession(sessionId, invokerEl) {
+      showConfirmDialog({
+        title: 'Revocar Sesión Individual',
+        resource: `Sesión ID: ${sessionId}`,
+        consequence: 'Se cerrará inmediatamente la sesión en el dispositivo remoto correspondiente.',
+        scope: 'Sesión Específica',
+        reversible: 'No',
+        confirmText: 'Revocar Sesión',
+        invokerEl: invokerEl,
+        onConfirm: async () => {
+          const res = await fetch('/api/v1/sessions/' + sessionId, {
+            method: 'DELETE',
+            headers: { 'x-csrf-token': csrfToken }
+          });
+          if (!res.ok) throw new Error('Error al revocar sesión');
+          showAlert('Sesión revocada exitosamente.');
+          loadSessions();
+        }
+      });
     }
 
-    async function handleRevokeAllOtherSessions() {
-      try {
-        const res = await fetch('/api/v1/sessions/all', {
-          method: 'DELETE',
-          headers: { 'x-csrf-token': csrfToken }
-        });
-        if (!res.ok) throw new Error('Error al revocar las demás sesiones');
-        showAlert('Todas las demás sesiones han sido revocadas.');
-        loadSessions();
-      } catch (err) {
-        showAlert(err.message, true);
-      }
+    function handleRevokeAllOtherSessions(evtOrEl) {
+      const invokerEl = evtOrEl && evtOrEl.currentTarget ? evtOrEl.currentTarget : (evtOrEl instanceof HTMLElement ? evtOrEl : document.getElementById('revokeAllBtn'));
+      showConfirmDialog({
+        title: 'Revocar Todas las Demás Sesiones',
+        resource: 'Todas las sesiones activas excepto la actual',
+        consequence: 'Se cerrarán las sesiones en todos los demás dispositivos conectados a esta cuenta.',
+        scope: 'Todas las demás sesiones activas',
+        reversible: 'No',
+        confirmText: 'Revocar Todas',
+        invokerEl: invokerEl,
+        onConfirm: async () => {
+          const res = await fetch('/api/v1/sessions/all', {
+            method: 'DELETE',
+            headers: { 'x-csrf-token': csrfToken }
+          });
+          if (!res.ok) throw new Error('Error al revocar las demás sesiones');
+          showAlert('Todas las demás sesiones han sido revocadas.');
+          loadSessions();
+        }
+      });
     }
 
     async function loadInvitations() {
@@ -579,7 +460,7 @@
           const btn = document.createElement('button');
           btn.className = 'btn-danger';
           btn.textContent = 'Revocar';
-          btn.onclick = () => handleRevokeInvitation(inv.id);
+          btn.onclick = (e) => handleRevokeInvitation(inv.id, inv.email, e.currentTarget);
           tdAction.appendChild(btn);
 
           tr.appendChild(tdEmail);
@@ -623,18 +504,25 @@
       }
     }
 
-    async function handleRevokeInvitation(id) {
-      try {
-        const res = await fetch('/api/v1/invitations/' + id, {
-          method: 'DELETE',
-          headers: { 'x-csrf-token': csrfToken }
-        });
-        if (!res.ok) throw new Error('Error al revocar invitación');
-        showAlert('Invitación revocada.');
-        loadInvitations();
-      } catch (err) {
-        showAlert(err.message, true);
-      }
+    function handleRevokeInvitation(id, email, invokerEl) {
+      showConfirmDialog({
+        title: 'Revocar Invitación',
+        resource: `Invitación para: ${email || id}`,
+        consequence: 'El destinatario no podrá utilizar el token de invitación para registrarse.',
+        scope: 'Invitación Individual',
+        reversible: 'No',
+        confirmText: 'Revocar Invitación',
+        invokerEl: invokerEl,
+        onConfirm: async () => {
+          const res = await fetch('/api/v1/invitations/' + id, {
+            method: 'DELETE',
+            headers: { 'x-csrf-token': csrfToken }
+          });
+          if (!res.ok) throw new Error('Error al revocar invitación');
+          showAlert('Invitación revocada.');
+          loadInvitations();
+        }
+      });
     }
 
     async function loadUsers() {
@@ -665,7 +553,7 @@
           const btn = document.createElement('button');
           btn.className = 'btn-danger';
           btn.textContent = u.isActive ? 'Desactivar' : 'Activar';
-          btn.onclick = () => handleToggleUserStatus(u.id, !u.isActive);
+          btn.onclick = (e) => handleToggleUserStatus(u.id, !u.isActive, u.fullName || u.email, e.currentTarget);
           tdAction.appendChild(btn);
 
           tr.appendChild(tdName);
@@ -680,23 +568,33 @@
       }
     }
 
-    async function handleToggleUserStatus(userId, newStatus) {
-      try {
-        const res = await fetch('/api/v1/users/' + userId + '/status', {
-          method: 'PATCH',
-          headers: {
-            'Content-Type': 'application/json',
-            'x-csrf-token': csrfToken
-          },
-          body: JSON.stringify({ isActive: newStatus })
-        });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error || 'Error al cambiar estado de usuario');
-        showAlert('Estado de usuario actualizado.');
-        loadUsers();
-      } catch (err) {
-        showAlert(err.message, true);
-      }
+    function handleToggleUserStatus(userId, newStatus, userIdentifier, invokerEl) {
+      const actionName = newStatus ? 'Activar' : 'Desactivar';
+      showConfirmDialog({
+        title: `${actionName} Usuario`,
+        resource: `Usuario: ${userIdentifier}`,
+        consequence: newStatus 
+          ? 'El usuario podrá volver a iniciar sesión y acceder a la plataforma.'
+          : 'El usuario perderá el acceso a la plataforma y no podrá iniciar sesión.',
+        scope: 'Acceso de Usuario',
+        reversible: 'Sí',
+        confirmText: `${actionName} Usuario`,
+        invokerEl: invokerEl,
+        onConfirm: async () => {
+          const res = await fetch('/api/v1/users/' + userId + '/status', {
+            method: 'PATCH',
+            headers: {
+              'Content-Type': 'application/json',
+              'x-csrf-token': csrfToken
+            },
+            body: JSON.stringify({ isActive: newStatus })
+          });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error || 'Error al cambiar estado de usuario');
+          showAlert('Estado de usuario actualizado.');
+          loadUsers();
+        }
+      });
     }
   </script>
 </body>

@@ -1,0 +1,63 @@
+/* Política Canon v0.4.0-alpha.2 — Categorías de Layout y Responsive */
+
+.container {
+  width: 100%;
+  transition: max-width 0.2s ease-out;
+}
+
+.card {
+  background: var(--canon-bg-surface);
+  backdrop-filter: blur(16px);
+  border: 1px solid var(--canon-border-default);
+  border-radius: var(--radius-xl);
+  padding: var(--space-10);
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
+  margin-bottom: var(--space-6);
+  width: 100%;
+}
+
+/* Categorías de Layout Justificadas por Vista */
+.layout-auth {
+  max-width: 440px;
+  margin: 0 auto;
+}
+
+.layout-content {
+  max-width: 680px;
+  margin: 0 auto;
+}
+
+.layout-settings {
+  max-width: 800px;
+  margin: 0 auto;
+}
+
+.layout-admin {
+  max-width: 1024px;
+  margin: 0 auto;
+}
+
+.layout-data-heavy {
+  max-width: 1280px;
+  margin: 0 auto;
+}
+
+/* Reglas Responsive Reflow (AUD-004) */
+@media (max-width: 640px) {
+  body {
+    padding: var(--space-4) var(--space-2);
+  }
+
+  .card {
+    padding: var(--space-5) var(--space-4);
+    border-radius: var(--radius-lg);
+  }
+
+  .layout-auth,
+  .layout-content,
+  .layout-settings,
+  .layout-admin,
+  .layout-data-heavy {
+    max-width: 100%;
+  }
+}

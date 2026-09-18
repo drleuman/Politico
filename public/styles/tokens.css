@@ -1,0 +1,80 @@
+/* Política Canon v0.4.0-alpha.2 — System Design Tokens */
+
+:root {
+  /* 1. Raw Palette Tokens (Valores Primitivos) */
+  --raw-slate-950: #090d12;
+  --raw-slate-900: #121820;
+  --raw-slate-850: #1a222d;
+  --raw-slate-800: #263140;
+  --raw-slate-700: #334155;
+  --raw-slate-400: #94a3b8;
+  --raw-slate-100: #f1f5f9;
+
+  --raw-sky-400: #38bdf8;
+  --raw-sky-500: #0284c7;
+  --raw-emerald-400: #4ade80;
+  --raw-emerald-500: #16a34a;
+  --raw-amber-400: #fbbf24;
+  --raw-red-400: #f87171;
+  --raw-red-500: #dc2626;
+
+  /* 2. Semantic Tokens (Tokens Mínimos de Propósito) */
+  --canon-bg-app: var(--raw-slate-950);
+  --canon-surface: var(--raw-slate-900);
+  --canon-surface-elevated: var(--raw-slate-850);
+  --canon-border-default: var(--raw-slate-800);
+  --canon-border-subtle: var(--raw-slate-700);
+
+  /* Texto */
+  --canon-text-primary: var(--raw-slate-100);
+  --canon-text-secondary: var(--raw-slate-400);
+  --canon-text-muted: var(--raw-slate-400); /* WCAG AAA Ratio > 7:1 */
+
+  /* Interactividad */
+  --canon-interactive-primary: var(--raw-sky-400);
+  --canon-interactive-primary-hover: var(--raw-sky-500);
+  --canon-focus-ring: var(--raw-sky-400);
+
+  /* Estados de Negocio y Alertas */
+  --canon-state-success: var(--raw-emerald-400);
+  --canon-state-success-bg: rgba(74, 222, 128, 0.12);
+  --canon-state-warning: var(--raw-amber-400);
+  --canon-state-warning-bg: rgba(251, 191, 36, 0.12);
+  --canon-state-danger: var(--raw-red-400);
+  --canon-state-danger-bg: rgba(248, 81, 73, 0.15);
+  --canon-state-disabled: rgba(148, 163, 184, 0.4);
+
+  /* Aliases Estándar Semánticos (B4 Requirement Compliance) */
+  --color-bg: var(--canon-bg-app);
+  --color-surface: var(--canon-surface);
+  --color-surface-elevated: var(--canon-surface-elevated);
+  --color-text-primary: var(--canon-text-primary);
+  --color-text-secondary: var(--canon-text-secondary);
+  --color-text-muted: var(--canon-text-muted);
+  --color-border: var(--canon-border-default);
+  --color-primary: var(--canon-interactive-primary);
+  --color-focus: var(--canon-focus-ring);
+  --color-success: var(--canon-state-success);
+  --color-warning: var(--canon-state-warning);
+  --color-danger: var(--canon-state-danger);
+  --color-disabled: var(--canon-state-disabled);
+
+  /* Espaciado Modular */
+  --space-1: 0.25rem; /* 4px */
+  --space-2: 0.5rem;  /* 8px */
+  --space-3: 0.75rem; /* 12px */
+  --space-4: 1rem;    /* 16px */
+  --space-6: 1.5rem;  /* 24px */
+  --space-8: 2rem;    /* 32px */
+  --space-10: 2.5rem; /* 40px */
+
+  /* Radios de Borde */
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+  --radius-full: 9999px;
+
+  /* Tipografía */
+  --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
+}

@@ -375,3 +375,17 @@ th {
   .dialog-actions button { width: 100%; }
   .toast-container { right: var(--space-3); left: var(--space-3); width: auto; }
 }
+
+/* Prefers Reduced Motion Safety (WCAG 2.1 AAA Motion Control) */
+@media (prefers-reduced-motion: reduce) {
+  .toast,
+  .tab-btn,
+  .dialog-overlay,
+  .btn-primary,
+  .btn-danger,
+  .btn-secondary {
+    transition: none !important;
+    animation: none !important;
+    transform: none !important;
+  }
+}

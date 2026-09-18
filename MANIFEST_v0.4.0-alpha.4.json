@@ -2,8 +2,8 @@
     "version":  "0.4.0-alpha.4",
     "releaseDate":  "2026-09-18",
     "packageName":  "politica-canon-v0.4.0-alpha.4.zip",
-    "sizeBytes":  203198,
-    "sha256":  "c340470e780262dc754b25c03c6aabe806376bb0e263e9b352c653b49ddb4291",
+    "sizeBytes":  203410,
+    "sha256":  "154a18872a152a41050be4c944d26a13e2da8647406bce822f0af249c3a08fe7",
     "fileCount":  85,
     "canonicalDatabaseEngine":  "PostgreSQL 16+",
     "dictamen":  "PASS (RELEASE CANDIDATE V0.4.0-ALPHA.4 - FASE C INSTITUTIONAL LANGUAGE \u0026 UX)"

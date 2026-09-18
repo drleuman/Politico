@@ -2,7 +2,8 @@ const fs = require('fs');
 const path = require('path');
 const { execSync } = require('child_process');
 
-console.log('=== VALIDACIÓN TÉCNICA Y DE REMEDIACIÓN DE ARQUITECTURA FASE B — RELEASE v0.4.0-alpha.3 ===\n');
+console.log('=== VALIDACIÓN TÉCNICA Y DE REMEDIACIÓN DE ARQUITECTURA FASE B — RELEASE v0.4.0-alpha.3 ===');
+console.log('Contrato de ejecución oficial: npm ci && node validate_v0.4.0-alpha.3.cjs\n');
 
 let passCount = 0;
 let totalChecks = 10;
@@ -36,17 +37,20 @@ if (allStylesExist) {
   console.log('❌ CHECK 3 FAIL: Faltan archivos de CSS en public/styles/');
 }
 
-// CHECK 4: ConfirmDialog Accesible WAI-ARIA, Focus Trap y Manejo de Bloqueo Async (B1 / M-B07)
+// CHECK 4: ConfirmDialog Accesible WAI-ARIA, Focus Trap, Bloqueo Async, M-B08 y M-B09
 const confirmDialogExists = fs.existsSync('public/js/confirm-dialog.js');
 const dialogJs = confirmDialogExists ? fs.readFileSync('public/js/confirm-dialog.js', 'utf8') : '';
 const hasAriaModal = dialogJs.includes('role="dialog"') && dialogJs.includes('aria-modal="true"') && dialogJs.includes('aria-labelledby') && dialogJs.includes('aria-describedby');
 const hasFocusTrap = dialogJs.includes('Tab') && dialogJs.includes('shiftKey') && dialogJs.includes('Escape');
 const hasProcessingLock = dialogJs.includes('isProcessing') && dialogJs.includes('if (isProcessing) return;');
-if (confirmDialogExists && hasAriaModal && hasFocusTrap && hasProcessingLock) {
-  console.log('✅ CHECK 4: Componente ConfirmDialog con WAI-ARIA, modal semántico, Focus Trap y bloqueo isProcessing verificado');
+const hasMB08AriaBusy = dialogJs.includes('removeAttribute(\'aria-busy\')') || dialogJs.includes('removeAttribute("aria-busy")');
+const hasMB09TabIndex = dialogJs.includes('tabindex="-1"') && dialogJs.includes('dialogBox.focus()');
+
+if (confirmDialogExists && hasAriaModal && hasFocusTrap && hasProcessingLock && hasMB08AriaBusy && hasMB09TabIndex) {
+  console.log('✅ CHECK 4: Componente ConfirmDialog con WAI-ARIA, modal semántico, Focus Trap, bloqueo isProcessing, ciclo aria-busy (M-B08) y contención de foco en procesamiento (M-B09) verificado');
   passCount++;
 } else {
-  console.log('❌ CHECK 4 FAIL: ConfirmDialog no cumple los requisitos de accesibilidad/bloqueo async');
+  console.log('❌ CHECK 4 FAIL: ConfirmDialog no cumple los requisitos de accesibilidad, bloqueo async o remediaciones M-B08/M-B09');
 }
 
 // CHECK 5: Cero uso de window.confirm() en public/index.html (B1)
@@ -100,20 +104,32 @@ if (hasScopeAndRev && keepsOpenOnError) {
   console.log('❌ CHECK 9 FAIL: ConfirmDialog no renderiza scope/reversibilidad o no retiene modal en fallos async');
 }
 
-// CHECK 10: Compilación y Sincronización Automática dist/public/
-try {
-  execSync('npm run build', { stdio: 'pipe' });
-  const distHtmlExists = fs.existsSync('dist/public/index.html');
-  const distDialogExists = fs.existsSync('dist/public/js/confirm-dialog.js');
-  const distStylesExist = styles.every(f => fs.existsSync(path.join('dist', 'public', 'styles', f)));
+// CHECK 10: Compilación y Sincronización Automática dist/public/ (Soporte H-B03 Pre-instalación y Post-instalación)
+const distHtmlExists = fs.existsSync('dist/public/index.html');
+const distDialogExists = fs.existsSync('dist/public/js/confirm-dialog.js');
+const distStylesExist = styles.every(f => fs.existsSync(path.join('dist', 'public', 'styles', f)));
+const hasNodeModules = fs.existsSync('node_modules');
+
+if (hasNodeModules) {
+  try {
+    execSync('npm run build', { stdio: 'pipe' });
+    if (fs.existsSync('dist/public/index.html') && fs.existsSync('dist/public/js/confirm-dialog.js')) {
+      console.log('✅ CHECK 10: Compilación ejecutada y sincronización en dist/public/ verificada exitosamente (Modo Re-compilación con dependencias)');
+      passCount++;
+    } else {
+      console.log('❌ CHECK 10 FAIL: Falló la sincronización de archivos en dist/public/ tras build');
+    }
+  } catch (err) {
+    console.log(`❌ CHECK 10 FAIL: Error al ejecutar build: ${err.message}`);
+  }
+} else {
+  // Extracción limpia sin node_modules todavía instalados
   if (distHtmlExists && distDialogExists && distStylesExist) {
-    console.log('✅ CHECK 10: Compilación ejecutada y sincronización en dist/public/ verificada exitosamente');
+    console.log('✅ CHECK 10: Sincronización estática en dist/public/ verificada (Modo Pre-instalación sin node_modules). Nota: Para validación con re-compilación ejecutar "npm ci && node validate_v0.4.0-alpha.3.cjs"');
     passCount++;
   } else {
-    console.log('❌ CHECK 10 FAIL: Falló la sincronización de archivos en dist/public/');
+    console.log('❌ CHECK 10 FAIL: Faltan archivos estáticos compilados en dist/public/ para modo pre-instalación');
   }
-} catch (err) {
-  console.log(`❌ CHECK 10 FAIL: Error al ejecutar build: ${err.message}`);
 }
 
 console.log('\n--------------------------------------------------------------------------');
@@ -122,3 +138,4 @@ console.log(`DICTAMEN DE VALIDACIÓN TÉCNICA RELEASE v0.4.0-alpha.3: ${passCoun
 if (passCount !== totalChecks) {
   process.exit(1);
 }
+

@@ -13,7 +13,7 @@
     overlay.style.display = 'none';
 
     overlay.innerHTML = `
-      <div class="dialog-box" role="dialog" aria-modal="true" aria-labelledby="confirmDialogTitle" aria-describedby="confirmDialogDesc">
+      <div class="dialog-box" tabindex="-1" role="dialog" aria-modal="true" aria-labelledby="confirmDialogTitle" aria-describedby="confirmDialogDesc">
         <div class="dialog-header">
           <h3 id="confirmDialogTitle">Confirmar Acción</h3>
         </div>
@@ -36,9 +36,19 @@
       }
     });
 
-    // Focus Trap dentro del modal
+    // M-B09 & Focus Trap dentro del modal
     overlay.addEventListener('keydown', (e) => {
       if (overlay.style.display === 'none' || e.key !== 'Tab') return;
+
+      // M-B09: Mantenimiento estricto de contención de foco durante procesamiento async
+      if (isProcessing) {
+        e.preventDefault();
+        const dialogBox = overlay.querySelector('.dialog-box');
+        if (dialogBox && typeof dialogBox.focus === 'function') {
+          dialogBox.focus();
+        }
+        return;
+      }
 
       const focusable = overlay.querySelectorAll('button:not([disabled])');
       if (focusable.length === 0) return;
@@ -146,6 +156,15 @@
     // H-B02 / M-B05: Renderizado seguro mediante textContent y construcción de nodos DOM
     renderDialogBody(descEl, options);
 
+    // Limpieza de errores anteriores al abrir modal
+    const errBox = document.getElementById('dialogErrorBox');
+    if (errBox) {
+      errBox.textContent = '';
+      errBox.style.display = 'none';
+    }
+
+    // M-B08: Garantizar remoción de aria-busy al abrir
+    actionBtn.removeAttribute('aria-busy');
     actionBtn.disabled = false;
     cancelBtn.disabled = false;
     actionBtn.textContent = options.confirmText || 'Confirmar';
@@ -164,6 +183,13 @@
     actionBtn.onclick = async () => {
       if (isProcessing) return;
 
+      // Limpieza de mensaje de error previo al reintentar
+      const staleErrBox = document.getElementById('dialogErrorBox');
+      if (staleErrBox) {
+        staleErrBox.textContent = '';
+        staleErrBox.style.display = 'none';
+      }
+
       if (typeof options.onConfirm === 'function') {
         isProcessing = true;
         actionBtn.disabled = true;
@@ -171,16 +197,23 @@
         actionBtn.textContent = 'Procesando...';
         actionBtn.setAttribute('aria-busy', 'true');
 
+        // M-B09: Mover foco a contenedor focusable para no perder contención mientras los botones están disabled
+        const dialogBox = overlay.querySelector('.dialog-box');
+        if (dialogBox && typeof dialogBox.focus === 'function') {
+          dialogBox.focus();
+        }
+
         try {
           await options.onConfirm();
           isProcessing = false;
+          actionBtn.removeAttribute('aria-busy'); // M-B08: Remoción en éxito
           closeConfirmDialog(true);
         } catch (err) {
           // M-B06: Mantener diálogo abierto en fallo, restaurar botones y mostrar error accesible
           isProcessing = false;
           actionBtn.disabled = false;
           cancelBtn.disabled = false;
-          actionBtn.removeAttribute('aria-busy');
+          actionBtn.removeAttribute('aria-busy'); // M-B08: Remoción en fallo
           actionBtn.textContent = options.confirmText || 'Confirmar';
 
           let errBox = document.getElementById('dialogErrorBox');
@@ -195,6 +228,7 @@
           errBox.style.display = 'block';
         }
       } else {
+        actionBtn.removeAttribute('aria-busy');
         closeConfirmDialog(true);
       }
     };
@@ -204,6 +238,10 @@
     if (isProcessing) return;
     const overlay = document.getElementById('confirmDialogOverlay');
     if (overlay) overlay.style.display = 'none';
+
+    // M-B08: Asegurar que aria-busy se elimine siempre al cerrar
+    const actionBtn = document.getElementById('confirmActionBtn');
+    if (actionBtn) actionBtn.removeAttribute('aria-busy');
 
     // Restauración del foco al elemento invocador
     if (activeInvoker && typeof activeInvoker.focus === 'function') {

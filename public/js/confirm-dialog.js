@@ -221,11 +221,15 @@
             errBox = document.createElement('div');
             errBox.id = 'dialogErrorBox';
             errBox.className = 'alert alert-danger';
+            errBox.setAttribute('role', 'alert'); // M-B10: Anuncio automático para lectores de pantalla
             errBox.style.marginTop = '0.75rem';
             descEl.appendChild(errBox);
           }
           errBox.textContent = err.message || 'Error durante la ejecución de la acción.';
           errBox.style.display = 'block';
+
+          // M-B10: Devolver el foco a un elemento navegable (cancelBtn) para no romper el ciclo de focus trap tras fallo
+          cancelBtn.focus();
         }
       } else {
         actionBtn.removeAttribute('aria-busy');

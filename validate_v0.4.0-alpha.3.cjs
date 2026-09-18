@@ -94,14 +94,16 @@ if (!hasUnsafeInnerHTML && hasSafeTextContent) {
   console.log('❌ CHECK 8 FAIL: ConfirmDialog contiene innerHTML dinámico inseguro');
 }
 
-// CHECK 9: Soporte Completo de Scope, Reversibilidad y Errores Async (M-B05 / M-B06 Remediación)
+// CHECK 9: Soporte Completo de Scope, Reversibilidad, Errores Async y Foco tras Fallo (M-B05 / M-B06 / M-B10 Remediación)
 const hasScopeAndRev = dialogJs.includes('options.scope') && (dialogJs.includes('options.reversible') || dialogJs.includes('options.reversibility'));
 const keepsOpenOnError = dialogJs.includes('isProcessing = false;') && dialogJs.includes('errBox.textContent');
-if (hasScopeAndRev && keepsOpenOnError) {
-  console.log('✅ CHECK 9: Renderizado explícito de Scope, Reversibilidad y retención de modal con error en fallos async verificado');
+const hasMB10RoleAlertAndFocus = dialogJs.includes("setAttribute('role', 'alert')") && dialogJs.includes('cancelBtn.focus()');
+
+if (hasScopeAndRev && keepsOpenOnError && hasMB10RoleAlertAndFocus) {
+  console.log('✅ CHECK 9: Renderizado de Scope, Reversibilidad, retención de modal con error, anuncio role="alert" y restauración de foco (M-B10) verificado');
   passCount++;
 } else {
-  console.log('❌ CHECK 9 FAIL: ConfirmDialog no renderiza scope/reversibilidad o no retiene modal en fallos async');
+  console.log('❌ CHECK 9 FAIL: ConfirmDialog no cumple requisitos de scope/reversibilidad o remediación M-B10 tras fallo async');
 }
 
 // CHECK 10: Compilación y Sincronización Automática dist/public/ (Soporte H-B03 Pre-instalación y Post-instalación)

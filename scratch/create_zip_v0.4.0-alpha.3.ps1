@@ -25,6 +25,7 @@ $includes = @(
     "validate_v0.4.0-alpha.3.cjs",
     "docker-compose.audit.yml",
     "src",
+    "dist",
     "db",
     "public",
     "deploy",

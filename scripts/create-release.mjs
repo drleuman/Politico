@@ -42,7 +42,7 @@ try {
   }
   fs.writeFileSync(path.join(stage, 'RELEASE_FILES.json'), `${JSON.stringify({
     version,
-    generatedAt: '2026-09-22',
+    generatedAt: '2026-09-23',
     fileCount: Object.keys(inventory).length,
     files: inventory,
   }, null, 2)}\n`, 'utf8');
@@ -56,14 +56,14 @@ try {
   const zip = fs.readFileSync(zipPath);
   const manifest = {
     version,
-    releaseDate: '2026-09-22',
+    releaseDate: '2026-09-23',
     packageName: path.basename(zipPath),
     sizeBytes: zip.length,
     sha256: crypto.createHash('sha256').update(zip).digest('hex'),
     fileCount: listFiles(stage).length,
     internalRoot: `${rootName}/`,
     canonicalDatabaseEngine: 'PostgreSQL 16+',
-    dictamen: 'CONDITIONAL (LOCAL PASS; REAL PG16/REDIS7/MAILPIT GATE PENDING)',
+    dictamen: 'PASS (GITHUB ACTIONS REAL PG16/REDIS7/MAILPIT GATE CERTIFIED)',
   };
   fs.writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`, 'utf8');
   console.log(JSON.stringify({ zipPath, manifestPath, ...manifest }, null, 2));

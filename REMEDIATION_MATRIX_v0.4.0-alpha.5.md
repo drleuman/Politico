@@ -18,4 +18,4 @@ Origen: auditoría independiente del artefacto `v0.4.0-alpha.4` (SHA-256 `77d8c7
 
 ## Estado
 
-Las remediaciones locales están implementadas y verificadas. El release permanece **condicionado** hasta ejecutar `npm test` completo con Docker, PostgreSQL 16, Redis 7 y Mailpit reales.
+Las remediaciones están implementadas y verificadas. El gate completo `npm test` obtuvo **PASS** en GitHub Actions (ejecución `35808205424`) con Docker, PostgreSQL 16, Redis 7 y Mailpit reales. El candidato puede avanzar a empaquetado final y revisión por Pull Request; no autoriza por sí mismo merge, tag, release ni despliegue productivo.

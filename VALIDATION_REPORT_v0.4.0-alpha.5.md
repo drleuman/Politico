@@ -1,7 +1,7 @@
 # Informe de validación — v0.4.0-alpha.5
 
-**Fecha:** 2026-09-22  
-**Estado:** **PASS LOCAL / GATE REAL PENDIENTE**
+**Fecha:** 2026-09-23
+**Estado:** **PASS — GATE REAL CERTIFICADO EN GITHUB ACTIONS**
 
 ## Resultados observados
 
@@ -16,7 +16,9 @@
 | `node validate_v0.4.0-alpha.5.cjs` | PASS — 11/11 |
 | `bash -n` scripts de despliegue | PASS |
 | Instalación `npm ci --omit=dev` aislada | PASS — `pg`, Fastify, Redis y Nodemailer resolubles |
-| `npm test` completo | **NO EJECUTABLE EN ESTE HOST** — Docker no está instalado; falla cerrado con `REAL_PG16_AND_REDIS_REQUIRED` |
+| `npm test` completo | PASS en GitHub Actions, Ubuntu 24.04 / Node.js 22 / Docker real |
+| PostgreSQL 16 + Redis 7 + Mailpit | PASS — integración real, E2E y limpieza `down -v` |
+| Workflow certificado | PASS — ejecución `35808205424`, job `107013617111` |
 
 ## Regresiones ejecutables añadidas
 
@@ -27,6 +29,13 @@
 - `ADMIN` no puede delegar `ADMIN`; `COORDINATOR` no puede delegar `COORDINATOR`.
 - El frontend no contiene el sink de perfil `container.innerHTML`, usa `/api/v1/auth/me` y no publica roles `user/admin` inválidos.
 
-## Gate de promoción
+## Evidencia del gate de promoción
 
-No crear tag, GitHub Release ni desplegar hasta obtener código 0 de `npm test` en un clon limpio con Docker real. Después debe verificarse la identidad del árbol Git con el artefacto empaquetado y ejecutar el preflight productivo antes de activar systemd.
+El workflow [v0.4.0-alpha.5 integration gate](https://github.com/drleuman/Politico/actions/runs/35808205424) ejecutó `npm ci` y `npm test` sobre el árbol Git `64a70ac27247e55823d35f6f9ee077b6489687db`. Finalizó con código 0 y verificó:
+
+- PostgreSQL 16, Redis 7 y Mailpit reales mediante Docker Compose.
+- Integración E2E de sesiones, reset de contraseña, outbox cifrado, aislamiento multitenant, MFA y matriz RBAC.
+- Validador independiente 11/11 PASS.
+- Limpieza incondicional de contenedores, redes y volúmenes mediante `finally` y `down -v`.
+
+La promoción permanece sujeta a identidad exacta entre el árbol final del candidato y el artefacto empaquetado, revisión del Pull Request y preflight productivo antes de activar systemd.

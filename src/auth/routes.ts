@@ -20,6 +20,7 @@ import {
 } from './session.js';
 import {
   createInvitation,
+  assertInvitationRoleAllowed,
   listInvitations,
   revokeInvitation,
   acceptInvitation,
@@ -30,7 +31,6 @@ import {
   verifyMfaStepUp,
   disableMfa,
 } from './mfa.js';
-import { sendInvitationEmail, sendPasswordResetEmail } from '../email/adapter.js';
 import { enqueueEmail } from '../email/outbox.js';
 import { buildResolvedAuthorizationContext } from './roles.js';
 import { recordSecurityAuditEvent } from '../audit/events.js';
@@ -124,9 +124,11 @@ export async function registerAuthRoutes(fastify: FastifyInstance) {
         return reply.status(400).send({ error: 'MISSING_FIELDS: email y role son obligatorios.' });
       }
 
-      if (['APPROVER', 'PUBLISHER', 'AUDITOR'].includes(role)) {
+      try {
+        assertInvitationRoleAllowed(authContext.roles, role);
+      } catch {
         await client.query('ROLLBACK');
-        return reply.status(403).send({ error: 'FORBIDDEN_GOVERNANCE_ROLE: No se permite invitar directamente roles privilegiados de gobernanza.' });
+        return reply.status(403).send({ error: 'INVITATION_ROLE_NOT_DELEGABLE: El rol solicitado no puede ser delegado por el actor actual.' });
       }
 
       const result = await createInvitation(client, {
@@ -135,6 +137,7 @@ export async function registerAuthRoutes(fastify: FastifyInstance) {
         email,
         role,
         invitedBy: session.userId,
+        inviterRoles: authContext.roles,
         expiresInHours,
       });
 
@@ -779,7 +782,7 @@ export async function registerAuthRoutes(fastify: FastifyInstance) {
         status: 'reset_requested',
         message: 'Si la cuenta existe y está activa, se enviará el enlace de recuperación por correo.',
       });
-    } catch (err: any) {
+    } catch {
       await client.query('ROLLBACK').catch(() => {});
       return reply.status(200).send({
         status: 'reset_requested',

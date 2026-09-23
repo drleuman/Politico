@@ -1,5 +1,5 @@
 -- ============================================================================
--- FASE 1: PRE-BOOTSTRAP DE ROLES Y GRUPOS DE SEGURIDAD CANÓNICOS (v0.3.30)
+-- FASE 1: PRE-BOOTSTRAP DE ROLES Y GRUPOS DE SEGURIDAD CANÓNICOS (v0.4.0-alpha.5)
 -- Ejecutar exclusivamente como SUPERUSUARIO ('postgres') antes de crear objetos
 -- ============================================================================
 

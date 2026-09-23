@@ -1,4 +1,4 @@
-/* Política Canon v0.4.0-alpha.2 — Estilos de Componentes Reutilizables */
+/* Política Canon v0.4.0-alpha.5 — Estilos de Componentes Reutilizables */
 
 /* Badge y Estatus */
 .header-badge {
@@ -168,6 +168,52 @@ th, td {
 th {
   color: var(--canon-text-secondary);
   font-weight: 600;
+}
+
+.section-heading {
+  align-items: center;
+  display: flex;
+  gap: var(--space-4);
+  justify-content: space-between;
+  margin-bottom: var(--space-4);
+}
+
+.profile-grid {
+  background: rgba(9, 13, 18, 0.52);
+  border: 1px solid var(--canon-border-default);
+  border-radius: var(--radius-lg);
+  display: grid;
+  grid-template-columns: minmax(9rem, 0.45fr) minmax(0, 1fr);
+  overflow: hidden;
+}
+
+.profile-grid dt,
+.profile-grid dd {
+  border-bottom: 1px solid var(--canon-border-default);
+  margin: 0;
+  padding: var(--space-4);
+}
+
+.profile-grid dt {
+  color: var(--canon-text-secondary);
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+.profile-grid dd {
+  color: var(--canon-text-primary);
+  overflow-wrap: anywhere;
+}
+
+.profile-grid > :nth-last-child(-n + 2) { border-bottom: 0; }
+
+@media (max-width: 640px) {
+  .section-heading { align-items: stretch; flex-direction: column; }
+  .profile-grid { grid-template-columns: 1fr; }
+  .profile-grid dt { border-bottom: 0; padding-bottom: var(--space-1); }
+  .profile-grid dd { padding-top: 0; }
+  .profile-grid > :nth-last-child(-n + 2) { border-bottom: 1px solid var(--canon-border-default); }
+  .profile-grid > :last-child { border-bottom: 0; }
 }
 
 /* Alertas y Feedback */
@@ -355,6 +401,20 @@ th {
   font-size: 0.85rem;
   color: var(--canon-text-secondary);
   max-width: 380px;
+}
+
+/* M-C03: ErrorState Component (Estado de Error Diferenciado de Estado Vacío) */
+.error-state-box {
+  border-color: rgba(248, 81, 73, 0.3);
+  background: rgba(248, 81, 73, 0.04);
+}
+
+.error-state-box .empty-state-icon {
+  color: var(--canon-state-danger);
+}
+
+.error-state-box .empty-state-title {
+  color: var(--canon-state-danger);
 }
 
 /* Mobile Component Responsive */

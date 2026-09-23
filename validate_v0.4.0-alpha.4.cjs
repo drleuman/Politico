@@ -94,20 +94,52 @@ if (!hasUnsafeInnerHTML && hasSafeTextContent) {
   console.log('❌ CHECK 8 FAIL: ConfirmDialog contiene innerHTML dinámico inseguro');
 }
 
-// CHECK 9: Componentes de Fase C (AUD-008 EmptyState y AUD-009 Toast Accesible)
+// CHECK 9: Componentes de Fase C (AUD-008 EmptyState/ErrorState y AUD-009 Toast Accesible — Reforzado con ajustes de auditoría)
 const toastExists = fs.existsSync('public/js/toast.js');
 const emptyStateExists = fs.existsSync('public/js/empty-state.js');
 const toastJs = toastExists ? fs.readFileSync('public/js/toast.js', 'utf8') : '';
 const emptyJs = emptyStateExists ? fs.readFileSync('public/js/empty-state.js', 'utf8') : '';
+const htmlForCheck9 = fs.readFileSync('public/index.html', 'utf8');
 
-const hasToastAria = toastJs.includes('role="status"') || toastJs.includes('role="alert"') || toastJs.includes("setAttribute('role', 'alert')");
+// Toast ARIA
+const hasToastAria = toastJs.includes("setAttribute('role', 'alert')") || toastJs.includes('role=\"alert\"');
+// M-C02: Danger default duration = 0
+const hasDangerPersistent = toastJs.includes("type === 'danger'") && toastJs.includes('? 0');
+// M-C02: setTimeout only when duration > 0
+const hasTimeoutGuard = toastJs.includes('if (duration > 0)');
+// EmptyState safe DOM
 const hasEmptyStateSafeDOM = emptyJs.includes('document.createElement') && emptyJs.includes('textContent');
+// M-C03: renderErrorState exported with safe DOM
+const hasRenderErrorState = emptyJs.includes('renderErrorState') && emptyJs.includes('error-state-box');
+// M-C03: Loaders call renderErrorState on error
+const hasLoaderErrorHandling = htmlForCheck9.includes('renderErrorState(tbody');
+// M-C03: 401/403 produce permission-specific feedback
+const hasPermissionHandling = htmlForCheck9.includes("=== 401 || res.status === 403") && htmlForCheck9.includes("'permission'");
+// Minor #1: aria-hidden on icons
+const hasAriaHiddenIcons = toastJs.includes("setAttribute('aria-hidden', 'true')") && emptyJs.includes("setAttribute('aria-hidden', 'true')");
+// Minor #2: showAlert does NOT call showToast
+const showAlertNoToast = !htmlForCheck9.includes('showToast({ message: msg');
 
-if (toastExists && emptyStateExists && hasToastAria && hasEmptyStateSafeDOM) {
-  console.log('✅ CHECK 9: Componentes de Fase C (Toast accesibles con ARIA live y EmptyState con construcción segura de DOM) verificados');
+const check9Conditions = [
+  { ok: toastExists && emptyStateExists, label: 'component files exist' },
+  { ok: hasToastAria, label: 'toast ARIA roles' },
+  { ok: hasDangerPersistent, label: 'M-C02: danger default duration = 0' },
+  { ok: hasTimeoutGuard, label: 'M-C02: setTimeout only when duration > 0' },
+  { ok: hasEmptyStateSafeDOM, label: 'EmptyState safe DOM' },
+  { ok: hasRenderErrorState, label: 'M-C03: renderErrorState exported' },
+  { ok: hasLoaderErrorHandling, label: 'M-C03: loaders render error state' },
+  { ok: hasPermissionHandling, label: 'M-C03: 401/403 permission-specific feedback' },
+  { ok: hasAriaHiddenIcons, label: 'aria-hidden on icons' },
+  { ok: showAlertNoToast, label: 'showAlert does NOT call showToast' }
+];
+
+const check9Pass = check9Conditions.every(c => c.ok);
+if (check9Pass) {
+  console.log('✅ CHECK 9: Componentes de Fase C verificados (Toast danger persistente, setTimeout condicionado, ErrorState diferenciado con 401/403, aria-hidden, showAlert aislado)');
   passCount++;
 } else {
-  console.log('❌ CHECK 9 FAIL: Faltan componentes de Fase C (toast.js / empty-state.js) o no cumplen normas de accesibilidad/seguridad');
+  const failures = check9Conditions.filter(c => !c.ok).map(c => c.label);
+  console.log(`❌ CHECK 9 FAIL: ${failures.join(', ')}`);
 }
 
 // CHECK 10: Compilación y Sincronización Automática dist/public/ (Soporte H-B03 Pre-instalación y Post-instalación)

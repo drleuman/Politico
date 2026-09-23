@@ -13,7 +13,7 @@ export const redisClient = new Redis(config.redisUrl, {
 
 redisClient.on('error', (err) => {
   const sanitizedMsg = err.message ? err.message.replace(/redis:\/\/.*@/, 'redis://****@') : 'Redis connection error';
-  // Log sanitized error message without credentials
+  console.error(`[REDIS] ${sanitizedMsg}`);
 });
 
 export async function checkRedisHealth(): Promise<{ ok: boolean; error?: string }> {
@@ -37,8 +37,7 @@ export async function closeRedisClient(): Promise<void> {
     if (redisClient.status !== 'end') {
       await redisClient.quit();
     }
-  } catch (err: any) {
+  } catch {
     redisClient.disconnect();
   }
 }
-

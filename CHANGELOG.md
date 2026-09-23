@@ -4,6 +4,27 @@ Todas las modificaciones notables introducidas en este proyecto serán documenta
 
 El formato está basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.0.0/), y este proyecto adhiere a [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0-alpha.5] - 2026-09-22
+
+### Seguridad
+
+- Descifrado de tokens del outbox fail-closed ante formato corrupto, clave incorrecta o autenticación GCM fallida; el ciphertext nunca se envía por SMTP.
+- Matriz explícita de delegación de invitaciones: se bloquea la creación directa de `ADMIN` y roles de gobernanza restringidos.
+- Eliminada la interpolación `innerHTML` de datos persistidos en la vista de perfil.
+- Preflight productivo obligatorio antes de habilitar servicios systemd.
+
+### Corregido
+
+- `pg` trasladado a dependencias runtime y restaurados los comandos canónicos `bootstrap:pre`, `migrate:prod` y `bootstrap:post`.
+- Vista de perfil conectada al endpoint existente `/api/v1/auth/me`.
+- Selector de invitaciones alineado con el enum PostgreSQL (`WRITER`, `REVIEWER`, `COORDINATOR`).
+- Metadatos activos y documentación actualizados a `v0.4.0-alpha.5`.
+
+### Frontend
+
+- Perfil semántico con `dl`, estados seguros, jerarquía editorial más sobria y dependencias tipográficas externas eliminadas.
+- Corrección del layout de sesiones y de los estilos de error accesibles.
+
 ## [0.3.17] - 2026-09-17
 
 ### Remediado y Endurecido (Fase 1.1 Correctiva — Inmutabilidad de Release y Normalización CRLF)

@@ -1,4 +1,4 @@
-/* Política Canon v0.4.0-alpha.2 — System Design Tokens */
+/* Política Canon v0.4.0-alpha.5 — System Design Tokens */
 
 :root {
   /* 1. Raw Palette Tokens (Valores Primitivos) */
@@ -78,5 +78,5 @@
   --radius-full: 9999px;
 
   /* Tipografía */
-  --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
+  --font-sans: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 }

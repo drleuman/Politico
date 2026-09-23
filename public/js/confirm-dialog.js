@@ -1,4 +1,4 @@
-/* Política Canon v0.4.0-alpha.3 — ConfirmDialog (Modal de Acciones Destructivas Accesible & Remediado) */
+/* Política Canon v0.4.0-alpha.5 — ConfirmDialog (Modal de Acciones Destructivas Accesible & Remediado) */
 
 (function (global) {
   let activeInvoker = null;
@@ -12,19 +12,40 @@
     overlay.className = 'dialog-overlay';
     overlay.style.display = 'none';
 
-    overlay.innerHTML = `
-      <div class="dialog-box" tabindex="-1" role="dialog" aria-modal="true" aria-labelledby="confirmDialogTitle" aria-describedby="confirmDialogDesc">
-        <div class="dialog-header">
-          <h3 id="confirmDialogTitle">Confirmar Acción</h3>
-        </div>
-        <div class="dialog-body" id="confirmDialogDesc">
-        </div>
-        <div class="dialog-actions">
-          <button type="button" id="confirmCancelBtn" class="btn-secondary">Cancelar</button>
-          <button type="button" id="confirmActionBtn" class="btn-danger">Confirmar</button>
-        </div>
-      </div>
-    `;
+    const dialog = document.createElement('div');
+    dialog.className = 'dialog-box';
+    dialog.tabIndex = -1;
+    dialog.setAttribute('role', 'dialog');
+    dialog.setAttribute('aria-modal', 'true');
+    dialog.setAttribute('aria-labelledby', 'confirmDialogTitle');
+    dialog.setAttribute('aria-describedby', 'confirmDialogDesc');
+
+    const header = document.createElement('div');
+    header.className = 'dialog-header';
+    const title = document.createElement('h3');
+    title.id = 'confirmDialogTitle';
+    title.textContent = 'Confirmar acción';
+    header.appendChild(title);
+
+    const body = document.createElement('div');
+    body.className = 'dialog-body';
+    body.id = 'confirmDialogDesc';
+
+    const actions = document.createElement('div');
+    actions.className = 'dialog-actions';
+    const cancel = document.createElement('button');
+    cancel.type = 'button';
+    cancel.id = 'confirmCancelBtn';
+    cancel.className = 'btn-secondary';
+    cancel.textContent = 'Cancelar';
+    const confirm = document.createElement('button');
+    confirm.type = 'button';
+    confirm.id = 'confirmActionBtn';
+    confirm.className = 'btn-danger';
+    confirm.textContent = 'Confirmar';
+    actions.append(cancel, confirm);
+    dialog.append(header, body, actions);
+    overlay.appendChild(dialog);
 
     document.body.appendChild(overlay);
 
@@ -220,7 +241,7 @@
           if (!errBox) {
             errBox = document.createElement('div');
             errBox.id = 'dialogErrorBox';
-            errBox.className = 'alert alert-danger';
+            errBox.className = 'alert alert-error';
             errBox.setAttribute('role', 'alert'); // M-B10: Anuncio automático para lectores de pantalla
             errBox.style.marginTop = '0.75rem';
             descEl.appendChild(errBox);

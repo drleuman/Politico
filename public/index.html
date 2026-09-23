@@ -1,13 +1,10 @@
 <!DOCTYPE html>
-<!-- Política Canon v0.4.0-alpha.4 -->
+<!-- Política Canon v0.4.0-alpha.5 -->
 <html lang="es">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Intranet Privada — Política Canon v0.4.0-alpha.4</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <title>Intranet Privada — Política Canon v0.4.0-alpha.5</title>
   
   <!-- B3: Extracción Determinista de Estilos Modularizados (Tokens, Base, Layout, Componentes) -->
   <link rel="stylesheet" href="/styles/tokens.css">
@@ -25,8 +22,9 @@
       <div class="header-badge">
         <span class="status-dot"></span> Intranet Segura · Nginx Gateway HTTPS
       </div>
-      <h1>Política Canon v0.4.0-alpha.4</h1>
-      <p class="subtitle">Plataforma Canónica de Gobernanza, Identidad Privada y Auditoría Inmutable.</p>
+      <p class="eyebrow">Gobernanza institucional</p>
+      <h1>Política Canon</h1>
+      <p class="subtitle">Identidad privada, decisiones trazables y auditoría inmutable en un único espacio de trabajo.</p>
 
       <!-- AUD-001: Estructura WAI-ARIA para Pestañas -->
       <div class="nav-tabs" id="navTabs" role="tablist" aria-label="Secciones de la Intranet">
@@ -82,7 +80,7 @@
 
       <!-- Tab: Sessions -->
       <div id="sessionsTab" class="tab-content" role="tabpanel" tabindex="0" aria-labelledby="tab-sessions" style="display:none;">
-        <div style="display:flex; justify-space-between; align-items:center; margin-bottom:1rem;">
+        <div class="section-heading">
           <h3>Sesiones Activas en la Cuenta</h3>
           <button class="btn-danger" id="revokeAllBtn" onclick="handleRevokeAllOtherSessions(event)">Revocar Todas las Demás</button>
         </div>
@@ -112,9 +110,10 @@
           </div>
           <div class="form-group">
             <label for="newInviteRole">Rol Asignado</label>
-            <select id="newInviteRole" style="width:100%; padding:0.75rem; border-radius:6px; border:1px solid var(--color-border); background:var(--color-bg); color:var(--color-text-primary);">
-              <option value="user">Usuario Estándar</option>
-              <option value="admin">Administrador</option>
+            <select id="newInviteRole">
+              <option value="WRITER">Redactor</option>
+              <option value="REVIEWER">Revisor</option>
+              <option value="COORDINATOR">Coordinador (solo administradores)</option>
             </select>
           </div>
           <button type="submit" id="createInviteBtn" class="btn-primary">Generar e Invitar</button>
@@ -158,7 +157,7 @@
     </div>
 
     <div class="footer">
-      Política Canon v0.4.0-alpha.4 — Sistema Canónico de Gobernanza y Auditoría Inmutable
+      Política Canon v0.4.0-alpha.5 — Sistema Canónico de Gobernanza y Auditoría Inmutable
     </div>
   </div>
 
@@ -168,13 +167,8 @@
     function showAlert(msg, isError = false) {
       const box = document.getElementById('alertBox');
       box.textContent = msg;
-      box.className = 'alert ' + (isError ? 'alert-danger' : 'alert-success');
+      box.className = 'alert ' + (isError ? 'alert-error' : 'alert-success');
       box.style.display = 'block';
-
-      // AUD-009: Notificación Toast contextual sincronizada
-      if (typeof showToast === 'function') {
-        showToast({ message: msg, type: isError ? 'danger' : 'success' });
-      }
     }
 
     function hideAlert() {
@@ -330,23 +324,39 @@
 
     async function loadProfile() {
       const container = document.getElementById('profileContent');
+      container.textContent = '';
       try {
-        const res = await fetch('/api/v1/users/me');
+        const res = await fetch('/api/v1/auth/me');
         if (!res.ok) {
-          container.innerHTML = '<p class="text-muted">Debes iniciar sesión para ver tu perfil.</p>';
+          const message = document.createElement('p');
+          message.className = 'text-muted';
+          message.textContent = 'Debes iniciar sesión para ver tu perfil.';
+          container.appendChild(message);
           return;
         }
-        const user = await res.json();
-        container.innerHTML = `
-          <div style="background:var(--color-bg); padding:1rem; border-radius:6px; border:1px solid var(--color-border);">
-            <p><strong>Nombre:</strong> ${user.fullName}</p>
-            <p><strong>Correo:</strong> ${user.email}</p>
-            <p><strong>Rol:</strong> <span class="badge badge-info">${user.role}</span></p>
-            <p><strong>MFA Activado:</strong> ${user.mfaEnabled ? 'Sí' : 'No'}</p>
-          </div>
-        `;
+        const data = await res.json();
+        const user = data.user || {};
+        const roles = Array.isArray(data.authContext?.roles) ? data.authContext.roles.join(', ') : 'Sin rol efectivo';
+        const profile = document.createElement('dl');
+        profile.className = 'profile-grid';
+        const appendField = (label, value) => {
+          const term = document.createElement('dt');
+          term.textContent = label;
+          const description = document.createElement('dd');
+          description.textContent = value;
+          profile.append(term, description);
+        };
+        appendField('Nombre', user.fullName || 'Sin nombre');
+        appendField('Correo', user.email || 'Sin correo');
+        appendField('Roles efectivos', roles);
+        appendField('MFA activado', user.mfaEnabled ? 'Sí' : 'No');
+        appendField('Organización activa', data.session?.organizationId || 'Sin organización');
+        container.appendChild(profile);
       } catch (err) {
-        container.innerHTML = '<p class="text-danger">Error al cargar perfil.</p>';
+        const message = document.createElement('p');
+        message.className = 'text-danger';
+        message.textContent = 'No se pudo cargar el perfil. Inténtalo de nuevo.';
+        container.appendChild(message);
       }
     }
 
@@ -356,7 +366,10 @@
 
       try {
         const res = await fetch('/api/v1/sessions');
-        if (!res.ok) return;
+        if (!res.ok) {
+          if (res.status === 401 || res.status === 403) throw new Error('permission');
+          throw new Error('server');
+        }
         const data = await res.json();
 
         // AUD-008: Renderizado de Estado Vacío en ausencia de registros
@@ -408,6 +421,16 @@
         });
       } catch (err) {
         console.error('Error cargando sesiones:', err);
+        // M-C03: Estado diferenciado — permission vs error vs empty
+        if (typeof renderErrorState === 'function') {
+          const isPermission = err.message === 'permission';
+          renderErrorState(tbody, {
+            title: isPermission ? 'No tienes permisos para consultar las sesiones' : 'No se pudieron cargar las sesiones',
+            description: isPermission ? 'Inicia sesión o contacta al administrador para obtener acceso.' : 'Error al conectar con el servidor. Inténtalo de nuevo.',
+            icon: isPermission ? '🔒' : '⚠',
+            colspan: 5
+          });
+        }
       }
     }
 
@@ -461,7 +484,10 @@
 
       try {
         const res = await fetch('/api/v1/invitations');
-        if (!res.ok) return;
+        if (!res.ok) {
+          if (res.status === 401 || res.status === 403) throw new Error('permission');
+          throw new Error('server');
+        }
         const data = await res.json();
 
         // AUD-008: Renderizado de Estado Vacío en ausencia de invitaciones pendientes
@@ -504,6 +530,16 @@
         });
       } catch (err) {
         console.error('Error cargando invitaciones:', err);
+        // M-C03: Estado diferenciado — permission vs error vs empty
+        if (typeof renderErrorState === 'function') {
+          const isPermission = err.message === 'permission';
+          renderErrorState(tbody, {
+            title: isPermission ? 'No tienes permisos para consultar las invitaciones' : 'No se pudieron cargar las invitaciones',
+            description: isPermission ? 'Inicia sesión o contacta al administrador para obtener acceso.' : 'Error al conectar con el servidor. Inténtalo de nuevo.',
+            icon: isPermission ? '🔒' : '⚠',
+            colspan: 4
+          });
+        }
       }
     }
 
@@ -564,7 +600,10 @@
 
       try {
         const res = await fetch('/api/v1/users');
-        if (!res.ok) return;
+        if (!res.ok) {
+          if (res.status === 401 || res.status === 403) throw new Error('permission');
+          throw new Error('server');
+        }
         const data = await res.json();
 
         // AUD-008: Renderizado de Estado Vacío en caso de lista vacía
@@ -611,6 +650,16 @@
         });
       } catch (err) {
         console.error('Error cargando usuarios:', err);
+        // M-C03: Estado diferenciado — permission vs error vs empty
+        if (typeof renderErrorState === 'function') {
+          const isPermission = err.message === 'permission';
+          renderErrorState(tbody, {
+            title: isPermission ? 'No tienes permisos para consultar los usuarios' : 'No se pudieron cargar los usuarios',
+            description: isPermission ? 'Inicia sesión o contacta al administrador para obtener acceso.' : 'Error al conectar con el servidor. Inténtalo de nuevo.',
+            icon: isPermission ? '🔒' : '⚠',
+            colspan: 5
+          });
+        }
       }
     }
 

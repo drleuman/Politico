@@ -1,5 +1,5 @@
 -- ============================================================================
--- FASE 3: POST-BOOTSTRAP DE PROPIEDAD, PERMISOS MÍNIMOS Y RLS (v0.3.30)
+-- FASE 3: POST-BOOTSTRAP DE PROPIEDAD, PERMISOS MÍNIMOS Y RLS (v0.4.0-alpha.5)
 -- Ejecutar exclusivamente como SUPERUSUARIO ('postgres') tras aplicar DDLs
 -- ============================================================================
 

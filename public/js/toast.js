@@ -1,4 +1,4 @@
-/* Política Canon v0.4.0-alpha.4 — Toast Component (Notificaciones Contextuales Accesibles WAI-ARIA) */
+/* Política Canon v0.4.0-alpha.5 — Toast Component (Notificaciones Contextuales Accesibles WAI-ARIA) */
 
 (function (global) {
   function createToastContainer() {
@@ -18,7 +18,16 @@
 
     const message = typeof options === 'string' ? options : (options.message || 'Notificación del sistema');
     const type = options.type || 'info'; // info, success, warning, danger
-    const duration = options.duration !== undefined ? options.duration : 4000;
+
+    // M-C02: Duración diferenciada por severidad
+    // danger = 0 (persistente, cierre manual obligatorio)
+    // warning = 8000ms (duración extendida)
+    // info/success = 4000ms (auto-dismiss estándar)
+    const defaultDuration =
+      type === 'danger'  ? 0 :
+      type === 'warning' ? 8000 :
+      4000;
+    const duration = options.duration !== undefined ? options.duration : defaultDuration;
 
     const toast = document.createElement('div');
     toast.className = `toast toast-${type}`;
@@ -35,6 +44,7 @@
     // Icono discreto según estado
     const iconEl = document.createElement('span');
     iconEl.className = 'toast-icon';
+    iconEl.setAttribute('aria-hidden', 'true');
     if (type === 'success') iconEl.textContent = '✓';
     else if (type === 'danger') iconEl.textContent = '⚠';
     else if (type === 'warning') iconEl.textContent = '!';

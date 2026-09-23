@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# Script de Provisión Inicial de Servidor — Política Canon v0.3.30
+# Script de Provisión Inicial de Servidor — Política Canon v0.4.0-alpha.5
 # SO Target: Ubuntu 24.04 LTS / Debian 12
 # Requisitos: Node.js 22 LTS, PostgreSQL 16+, Redis 7+
 
 set -euo pipefail
 
-echo "== [POLÍTICA CANON v0.3.30] Provisión Inicial de Servidor =="
+echo "== [POLÍTICA CANON v0.4.0-alpha.5] Provisión Inicial de Servidor =="
 
 # 1. Crear usuario del sistema sin shell interactiva y asociar pertenencia de grupo postgres (B-02)
 if ! id -u politica-canon >/dev/null 2>&1; then
@@ -183,7 +183,7 @@ TMP_ENV="/etc/politica-canon/runtime.env.tmp"
     touch "${TMP_ENV}"
     chmod 0640 "${TMP_ENV}"
     cat <<EOF > "${TMP_ENV}"
-# Configuración de tiempo de ejecución Política Canon v0.3.28
+# Configuración de tiempo de ejecución Política Canon v0.4.0-alpha.5
 NODE_ENV=production
 PORT=3000
 HOST=127.0.0.1
@@ -217,7 +217,8 @@ chown root:politica-canon /etc/politica-canon/runtime.env
 chmod 0640 /etc/politica-canon/runtime.env
 echo "[+] Archivo /etc/politica-canon/runtime.env configurado de forma atómica con propietario root:politica-canon y modo 0640."
 
-# 8. Instalar e Iniciar Unidades de Servicio Systemd (C-02 Secuenciación Fail-Closed)
+# 8. Instalar unidades systemd sin habilitarlas ni iniciarlas.
+# La activación queda reservada a activate-release.sh, después del gate completo.
 if [ -f /opt/politica-canon/app/deploy/systemd/politica-canon.service ]; then
     echo "[+] Instalando servicio web systemd..."
     cp /opt/politica-canon/app/deploy/systemd/politica-canon.service /etc/systemd/system/
@@ -234,32 +235,10 @@ else
     exit 1
 fi
 
-echo "[+] Recargando unidades systemd y registrando habilitación (enable)..."
+echo "[+] Recargando unidades systemd sin habilitar ni iniciar servicios..."
 systemctl daemon-reload
-systemctl enable politica-canon.service
-systemctl enable politica-canon-outbox-worker.service
+systemctl disable politica-canon.service politica-canon-outbox-worker.service >/dev/null 2>&1 || true
 
-# C-02: Comprobar si las migraciones de base de datos han sido aplicadas antes de iniciar los servicios
-HAS_OUTBOX=$(PGPASSWORD="${WORKER_DB_PASS}" psql -h 127.0.0.1 -U politica_canon_email_worker -d politica_canon -tAc "SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'email_outbox';" 2>/dev/null || true)
-
-if [ "${HAS_OUTBOX}" = "1" ]; then
-    echo "[+] Esquema de base de datos e historia de migraciones verificados. Iniciando servicios..."
-    systemctl start politica-canon.service
-    systemctl start politica-canon-outbox-worker.service
-
-    # Verificación Fail-Closed de Estado Activo
-    if ! systemctl is-active --quiet politica-canon.service; then
-        echo "❌ ERROR FATAL: politica-canon.service no se encuentra en estado activo tras la provisión."
-        exit 1
-    fi
-
-    if ! systemctl is-active --quiet politica-canon-outbox-worker.service; then
-        echo "❌ ERROR FATAL: politica-canon-outbox-worker.service no se encuentra en estado activo tras la provisión."
-        exit 1
-    fi
-    echo "[+] Servicios systemd verificados y activos."
-else
-    echo "ℹ️ [DESPLIEGUE INICIAL / SECUENCIACIÓN C-02] La tabla 'email_outbox' no existe aún en la base de datos. Unidades systemd registradas y habilitadas (enable). Ejecutar ahora: 'npm run bootstrap:pre && npm run migrate:prod && npm run bootstrap:post' y posteriormente 'systemctl start politica-canon.service politica-canon-outbox-worker.service'."
-fi
-
-echo "== [POLÍTICA CANON v0.3.30] Provisión completada exitosamente =="
+echo "[+] Unidades instaladas y deliberadamente inactivas."
+echo "[+] Siguiente paso obligatorio: sudo bash /opt/politica-canon/app/deploy/scripts/activate-release.sh"
+echo "== [POLÍTICA CANON v0.4.0-alpha.5] Provisión completada exitosamente =="

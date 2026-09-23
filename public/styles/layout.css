@@ -1,4 +1,4 @@
-/* Política Canon v0.4.0-alpha.2 — Categorías de Layout y Responsive */
+/* Política Canon v0.4.0-alpha.5 — Categorías de Layout y Responsive */
 
 .container {
   width: 100%;
@@ -7,11 +7,10 @@
 
 .card {
   background: var(--canon-bg-surface);
-  backdrop-filter: blur(16px);
   border: 1px solid var(--canon-border-default);
   border-radius: var(--radius-xl);
   padding: var(--space-10);
-  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.28);
   margin-bottom: var(--space-6);
   width: 100%;
 }

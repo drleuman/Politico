@@ -89,12 +89,14 @@ export async function processEmailOutbox(
 
     // 3. Procesar individualmente los mensajes reclamados
     for (const msg of claimRes.rows) {
-      const payloadObj = typeof msg.payload === 'string' ? JSON.parse(msg.payload) : { ...msg.payload };
-      const rawToken = decryptPayloadToken(payloadObj.token);
+      let payloadObj: Record<string, any> | null = null;
 
       try {
+        const parsedPayload: Record<string, any> = typeof msg.payload === 'string' ? JSON.parse(msg.payload) : { ...msg.payload };
+        payloadObj = parsedPayload;
+        const rawToken = decryptPayloadToken(parsedPayload.token);
         if (msg.template === 'INVITATION') {
-          await sendInvitationEmail(msg.recipient, rawToken, payloadObj.tenantName || 'Política Canon', msg.id);
+          await sendInvitationEmail(msg.recipient, rawToken, parsedPayload.tenantName || 'Política Canon', msg.id);
         } else if (msg.template === 'PASSWORD_RESET') {
           await sendPasswordResetEmail(msg.recipient, rawToken, msg.id);
         } else {
@@ -102,8 +104,8 @@ export async function processEmailOutbox(
         }
 
         // Redactar secreto del payload (H-02, H-04) tras entrega exitosa (estado terminal SENT)
-        if (payloadObj.token) {
-          payloadObj.token = '[REDACTED]';
+        if (parsedPayload.token) {
+          parsedPayload.token = '[REDACTED]';
         }
 
         const updateRes = await client.query(
@@ -129,9 +131,13 @@ export async function processEmailOutbox(
         const backoffSeconds = nextAttempts * 30;
 
         // Redactar secreto del payload si se alcanza el estado terminal FAILED (H-02)
-        if (newStatus === 'FAILED' && payloadObj.token) {
+        if (newStatus === 'FAILED' && payloadObj?.token) {
           payloadObj.token = '[REDACTED]';
         }
+
+        const persistedPayload = payloadObj === null
+          ? (typeof msg.payload === 'string' ? msg.payload : JSON.stringify(msg.payload))
+          : JSON.stringify(payloadObj);
 
         await client.query(
           `UPDATE email_outbox
@@ -143,7 +149,7 @@ export async function processEmailOutbox(
                locked_at = NULL,
                locked_by = NULL
            WHERE id = $6 AND locked_by = $7 AND status = 'PROCESSING'`,
-          [newStatus, nextAttempts, err.message || String(err), JSON.stringify(payloadObj), backoffSeconds, msg.id, workerId]
+          [newStatus, nextAttempts, err.message || String(err), persistedPayload, backoffSeconds, msg.id, workerId]
         );
       }
     }

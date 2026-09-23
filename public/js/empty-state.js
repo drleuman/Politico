@@ -1,4 +1,4 @@
-/* Política Canon v0.4.0-alpha.5 — EmptyState Component (Estados Vacíos Accesibles para Tablas & Paneles) */
+/* Política Canon v0.4.0-alpha.6 — EmptyState Component (Estados Vacíos Accesibles para Tablas & Paneles) */
 
 (function (global) {
   function renderEmptyState(targetContainer, options) {

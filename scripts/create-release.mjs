@@ -4,7 +4,7 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 
-const version = '0.4.0-alpha.5';
+const version = '0.4.0-alpha.6';
 const rootName = `politica-canon-v${version}`;
 const projectRoot = process.cwd();
 const outputDir = path.resolve(projectRoot, '..');
@@ -63,7 +63,7 @@ try {
     fileCount: listFiles(stage).length,
     internalRoot: `${rootName}/`,
     canonicalDatabaseEngine: 'PostgreSQL 16+',
-    dictamen: 'PASS (GITHUB ACTIONS REAL PG16/REDIS7/MAILPIT GATE CERTIFIED)',
+    dictamen: 'CONDITIONAL (LOCAL PASS; NEW REAL PG16/REDIS7/MAILPIT GATE PENDING)',
   };
   fs.writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`, 'utf8');
   console.log(JSON.stringify({ zipPath, manifestPath, ...manifest }, null, 2));

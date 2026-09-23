@@ -1,4 +1,4 @@
-# Despliegue controlado — v0.4.0-alpha.5
+# Despliegue controlado — v0.4.0-alpha.6
 
 ## Gate previo
 

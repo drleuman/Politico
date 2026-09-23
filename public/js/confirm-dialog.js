@@ -1,4 +1,4 @@
-/* Política Canon v0.4.0-alpha.5 — ConfirmDialog (Modal de Acciones Destructivas Accesible & Remediado) */
+/* Política Canon v0.4.0-alpha.6 — ConfirmDialog (Modal de Acciones Destructivas Accesible & Remediado) */
 
 (function (global) {
   let activeInvoker = null;

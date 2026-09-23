@@ -1,7 +1,7 @@
 {
   "name": "politica-canon",
-  "version": "0.4.0-alpha.5",
-  "description": "Monolito Fastify, Identidad, Invitaciones Privadas, Usuarios, Sesiones y RBAC/ABAC — Política Canon v0.4.0-alpha.5",
+  "version": "0.4.0-alpha.6",
+  "description": "Monolito Fastify, Identidad, Invitaciones Privadas, Usuarios, Sesiones y RBAC/ABAC — Política Canon v0.4.0-alpha.6",
   "type": "module",
   "main": "dist/server.js",
   "scripts": {
@@ -15,7 +15,7 @@
     "preflight:prod": "node scripts/preflight-production.mjs",
     "email-worker": "node scripts/email-worker.mjs",
     "test:security": "node scripts/test-security-regressions.mjs",
-    "test": "npm run build && npm run test:security && node scripts/test-integration-pg16.mjs && node validate_v0.4.0-alpha.5.cjs"
+    "test": "npm run build && npm run test:security && node scripts/test-integration-pg16.mjs && node validate_v0.4.0-alpha.6.cjs"
   },
   "devDependencies": {
     "@electric-sql/pglite": "^0.5.8",

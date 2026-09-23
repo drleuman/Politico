@@ -4,7 +4,14 @@ Todas las modificaciones notables introducidas en este proyecto serán documenta
 
 El formato está basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.0.0/), y este proyecto adhiere a [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.4.0-alpha.5] - 2026-09-22
+## [0.4.0-alpha.6] - 2026-09-23
+
+### Compatibilidad de despliegue
+
+- Restaurados byte a byte los archivos históricos `0003` y `0004`; sus finales CRLF forman parte del checksum ya registrado en producción.
+- Añadido un gate criptográfico que rechaza cualquier cambio de bytes en las cuatro migraciones ya aplicadas.
+- Configurado Git para no normalizar las migraciones históricas CRLF durante checkout, commit o empaquetado.
+- El activador side-by-side conserva y restaura automáticamente el árbol y las unidades systemd anteriores si falla cualquier gate.
 
 ### Seguridad
 
@@ -18,7 +25,7 @@ El formato está basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1
 - `pg` trasladado a dependencias runtime y restaurados los comandos canónicos `bootstrap:pre`, `migrate:prod` y `bootstrap:post`.
 - Vista de perfil conectada al endpoint existente `/api/v1/auth/me`.
 - Selector de invitaciones alineado con el enum PostgreSQL (`WRITER`, `REVIEWER`, `COORDINATOR`).
-- Metadatos activos y documentación actualizados a `v0.4.0-alpha.5`.
+- Metadatos activos y documentación actualizados a `v0.4.0-alpha.6`.
 
 ### Frontend
 

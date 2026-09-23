@@ -1,8 +1,9 @@
 const fs = require('node:fs');
 const path = require('node:path');
+const crypto = require('node:crypto');
 const { execFileSync } = require('node:child_process');
 
-const VERSION = '0.4.0-alpha.5';
+const VERSION = '0.4.0-alpha.6';
 let passed = 0;
 let failed = 0;
 function check(label, condition) {
@@ -20,6 +21,16 @@ check('Versión y comandos canónicos', pkg.version === VERSION &&
   !JSON.stringify(pkg.scripts).includes('drizzle'));
 
 check('Driver pg pertenece a dependencies runtime', Boolean(pkg.dependencies?.pg) && !pkg.devDependencies?.pg);
+
+const immutableMigrationHashes = {
+  'db/migrations/0001_initial_schema.sql': '92bc41ef4d9c93a0fe979b3eb921e9a918b13d839228b80bbbfaf82ba074a5ed',
+  'db/migrations/0003_fase_1_1_identity_rbac.sql': '61a83aba5e5bc6bdfb58f562d2cdcfa54edb133a5d7012867e796abb01f57ce2',
+  'db/migrations/0004_fase_1_1_token_resolver_fix.sql': '17acc543556291ce30d8c3244c4a81229110cc9bdc3b9e3b2cca9fde3730f7a7',
+  'db/migrations/0005_fase_1_1_functional.sql': 'c0b08ebf9d7026f0455ecf064fbf0e73330a378c0019e34c4df69e88241a21e9',
+};
+check('Migraciones aplicadas conservan exactamente sus bytes certificados',
+  Object.entries(immutableMigrationHashes).every(([file, expected]) =>
+    crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex') === expected));
 
 for (const command of [['run', 'typecheck'], ['run', 'build'], ['run', 'test:security']]) {
   execFileSync('npm', command, { stdio: 'pipe', shell: process.platform === 'win32' });

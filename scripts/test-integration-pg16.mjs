@@ -4,7 +4,7 @@ import pg from 'pg';
 import http from 'http';
 const { Client } = pg;
 
-console.log('=== RUNNER DE INTEGRACIÓN REAL POSTGRESQL 16, REDIS 7 & MAILPIT SMTP (v0.4.0-alpha.5) ===\n');
+console.log('=== RUNNER DE INTEGRACIÓN REAL POSTGRESQL 16, REDIS 7 & MAILPIT SMTP (v0.4.0-alpha.6) ===\n');
 
 const ephemeralSecret = () => crypto.randomBytes(32).toString('hex');
 const testPassword = (label) => `${label}-${crypto.randomBytes(18).toString('base64url')}!Aa1`;
@@ -212,8 +212,8 @@ async function runIntegrationTest() {
       await adminClient.end();
     }
 
-    // VERIFICACIÓN CON SERVICIOS REALES FASTIFY (FASE 1.1: ADVERSARIAL SECURITY v0.4.0-alpha.5)
-    console.log('\n--- VERIFICACIÓN DE SEGURIDAD ADVERSARIAL FASE 1.1 (PG16 + REDIS 7 + MAILPIT SMTP — RELEASE v0.4.0-alpha.5) ---');
+    // VERIFICACIÓN CON SERVICIOS REALES FASTIFY (FASE 1.1: ADVERSARIAL SECURITY v0.4.0-alpha.6)
+    console.log('\n--- VERIFICACIÓN DE SEGURIDAD ADVERSARIAL FASE 1.1 (PG16 + REDIS 7 + MAILPIT SMTP — RELEASE v0.4.0-alpha.6) ---');
     
     const { hashPassword } = await import('../dist/auth/crypto.js');
     
@@ -763,7 +763,7 @@ async function runIntegrationTest() {
 
     await dbClientC02.end();
 
-    console.log('\n🎉 SUITE DE INTEGRACIÓN FASE 1.1 REMEDIADA (v0.4.0-alpha.5) COMPLETA (PASS)');
+    console.log('\n🎉 SUITE DE INTEGRACIÓN FASE 1.1 REMEDIADA (v0.4.0-alpha.6) COMPLETA (PASS)');
 
   } finally {
     if (fastifyApp) {

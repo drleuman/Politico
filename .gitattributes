@@ -2,3 +2,8 @@
 *.sh text eol=lf
 *.bash text eol=lf
 *.sql text eol=lf
+
+# Applied migrations are byte-immutable because schema_migrations stores SHA-256.
+# These two historical migrations were originally released with CRLF endings.
+db/migrations/0003_fase_1_1_identity_rbac*.sql binary
+db/migrations/0004_fase_1_1_token_resolver_fix*.sql binary

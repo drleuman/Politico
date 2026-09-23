@@ -1,4 +1,4 @@
-# Política Canon v0.4.0-alpha.5
+# Política Canon v0.4.0-alpha.6
 
 Monolito institucional de gobernanza con Fastify, PostgreSQL 16, Redis 7 y un worker SMTP desacoplado. Esta versión corrige los bloqueadores descubiertos en la auditoría independiente de `v0.4.0-alpha.4` y continúa el frontend de identidad, sesiones, invitaciones y usuarios.
 

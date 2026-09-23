@@ -1,4 +1,4 @@
-/* Política Canon v0.4.0-alpha.5 — Toast Component (Notificaciones Contextuales Accesibles WAI-ARIA) */
+/* Política Canon v0.4.0-alpha.6 — Toast Component (Notificaciones Contextuales Accesibles WAI-ARIA) */
 
 (function (global) {
   function createToastContainer() {

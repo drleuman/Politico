@@ -1,16 +1,16 @@
-name: v0.4.0-alpha.5 integration gate
+name: v0.4.0-alpha.6 integration gate
 
 on:
   workflow_dispatch:
   push:
     branches:
-      - release/v0.4.0-alpha.5-candidate
+      - release/v0.4.0-alpha.6-candidate
 
 permissions:
   contents: read
 
 concurrency:
-  group: v040-alpha5-integration-${{ github.ref }}
+  group: v040-alpha6-integration-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:

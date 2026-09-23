@@ -4,7 +4,7 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 
-const version = '0.4.0-alpha.5';
+const version = '0.4.0-alpha.6';
 const rootName = `politica-canon-v${version}`;
 const projectRoot = process.cwd();
 const outputDir = path.resolve(projectRoot, '..');

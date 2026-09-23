@@ -90,7 +90,7 @@ process.on('SIGINT', () => shutdown('SIGINT'));
 async function start() {
   try {
     await server.listen({ port: config.port, host: config.host });
-    console.log(`[INFO] Política Canon Monolith API v0.4.0-alpha.5 listening at http://${config.host}:${config.port}`);
+    console.log(`[INFO] Política Canon Monolith API v0.4.0-alpha.6 listening at http://${config.host}:${config.port}`);
   } catch (err) {
     server.log.error(err);
     process.exit(1);

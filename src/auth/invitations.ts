@@ -16,6 +16,27 @@ export interface Invitation {
   createdAt: string;
 }
 
+const INVITABLE_ROLES_BY_ACTOR: Readonly<Record<'ADMIN' | 'COORDINATOR', readonly UserRole[]>> = {
+  ADMIN: ['COORDINATOR', 'WRITER', 'REVIEWER'],
+  COORDINATOR: ['WRITER', 'REVIEWER'],
+};
+
+export function assertInvitationRoleAllowed(actorRoles: UserRole[], requestedRole: unknown): asserts requestedRole is UserRole {
+  if (typeof requestedRole !== 'string') {
+    throw new Error('INVALID_INVITATION_ROLE');
+  }
+
+  const allowed = actorRoles.includes('ADMIN')
+    ? INVITABLE_ROLES_BY_ACTOR.ADMIN
+    : actorRoles.includes('COORDINATOR')
+      ? INVITABLE_ROLES_BY_ACTOR.COORDINATOR
+      : [];
+
+  if (!allowed.includes(requestedRole as UserRole)) {
+    throw new Error('INVITATION_ROLE_NOT_DELEGABLE');
+  }
+}
+
 /**
  * Crea una invitación privada de un solo uso vinculada a organización, workspace (opcional), rol y emisor
  */
@@ -27,14 +48,13 @@ export async function createInvitation(
     email: string;
     role: UserRole;
     invitedBy: string;
+    inviterRoles: UserRole[];
     expiresInHours?: number;
   }
 ): Promise<{ invitationId: string; rawToken: string; expiresAt: string }> {
-  const { organizationId, workspaceId = null, email, role, invitedBy, expiresInHours = 48 } = params;
+  const { organizationId, workspaceId = null, email, role, invitedBy, inviterRoles, expiresInHours = 48 } = params;
 
-  if (['APPROVER', 'PUBLISHER', 'AUDITOR'].includes(role)) {
-    throw new Error('ROLE_RESTRICTED: No se permite invitar directamente a roles de gobernanza restringidos (APPROVER, PUBLISHER, AUDITOR). Utilice el flujo transaccional de solicitudes.');
-  }
+  assertInvitationRoleAllowed(inviterRoles, role);
 
   const normalizedEmail = email.trim().toLowerCase();
   const rawToken = generateHighEntropyToken(32);

@@ -23,9 +23,6 @@ export function resetTransporterForTesting(): void {
 }
 
 export function isEmailConfigured(): boolean {
-  if (config.smtpHost && config.smtpPort) {
-    return true;
-  }
   if (config.nodeEnv === 'test') {
     return true;
   }
@@ -81,8 +78,8 @@ export async function verifyEmailTransport(): Promise<boolean> {
     try {
       await transporter.verify();
       return true;
-    } catch (err) {
-      console.error('[EMAIL ADAPTER] SMTP Transport verification failed:', err);
+    } catch {
+      console.error('[EMAIL ADAPTER] SMTP transport verification failed.');
       cachedTransporter = null;
       return false;
     }
@@ -122,8 +119,8 @@ export async function sendInvitationEmail(to: string, token: string, tenantName:
         messageId: outboxId ? `<outbox-${outboxId}@politica-canon.local>` : undefined,
       });
       return;
-    } catch (err) {
-      console.error('[EMAIL ADAPTER] Error sending invitation email via SMTP:', err);
+    } catch {
+      console.error('[EMAIL ADAPTER] Invitation delivery failed.');
       throw new Error('EMAIL_DELIVERY_FAILED');
     }
   }
@@ -168,8 +165,8 @@ export async function sendPasswordResetEmail(to: string, token: string, outboxId
         messageId: outboxId ? `<outbox-${outboxId}@politica-canon.local>` : undefined,
       });
       return;
-    } catch (err) {
-      console.error('[EMAIL ADAPTER] Error sending password reset email via SMTP:', err);
+    } catch {
+      console.error('[EMAIL ADAPTER] Password reset delivery failed.');
       throw new Error('EMAIL_DELIVERY_FAILED');
     }
   }

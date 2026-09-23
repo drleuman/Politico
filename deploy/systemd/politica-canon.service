@@ -1,5 +1,5 @@
 [Unit]
-Description=Politica Canon Monolith Service (v0.3.30)
+Description=Politica Canon Monolith Service (v0.4.0-alpha.5)
 After=network.target postgresql.service redis-server.service
 Wants=postgresql.service redis-server.service
 
@@ -18,7 +18,14 @@ NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=strict
 ProtectHome=true
-ReadWritePaths=/opt/politica-canon
+PrivateDevices=true
+ProtectClock=true
+ProtectKernelLogs=true
+ProtectKernelModules=true
+ProtectKernelTunables=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
 
 [Install]
 WantedBy=multi-user.target

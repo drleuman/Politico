@@ -1,154 +1,46 @@
 <!DOCTYPE html>
-<!-- Política Canon v0.3.30 -->
+<!-- Política Canon v0.4.0-alpha.5 -->
 <html lang="es">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Intranet Privada — Política Canon v0.3.30</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <style>
-    :root {
-      --bg-color: #0d1117;
-      --card-bg: rgba(22, 27, 34, 0.85);
-      --border-color: rgba(48, 54, 61, 0.8);
-      --text-main: #f0f6fc;
-      --text-muted: #8b949e;
-      --accent-blue: #58a6ff;
-      --accent-emerald: #3fb950;
-      --accent-amber: #d29922;
-      --accent-red: #f85149;
-      --font-family: 'Inter', system-ui, -apple-system, sans-serif;
-    }
-
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-
-    body {
-      background-color: var(--bg-color);
-      color: var(--text-main);
-      font-family: var(--font-family);
-      min-height: 100vh;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      padding: 2rem 1rem;
-      background-image: 
-        radial-gradient(at 20% 20%, rgba(88, 166, 255, 0.08) 0px, transparent 50%),
-        radial-gradient(at 80% 80%, rgba(63, 185, 80, 0.05) 0px, transparent 50%);
-    }
-
-    .container { max-width: 800px; width: 100%; }
-
-    .card {
-      background: var(--card-bg);
-      backdrop-filter: blur(16px);
-      border: 1px solid var(--border-color);
-      border-radius: 16px;
-      padding: 2.5rem;
-      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
-      margin-bottom: 1.5rem;
-    }
-
-    .header-badge {
-      display: inline-flex;
-      align-items: center;
-      gap: 0.5rem;
-      background: rgba(63, 185, 80, 0.12);
-      border: 1px solid rgba(63, 185, 80, 0.3);
-      color: var(--accent-emerald);
-      padding: 0.35rem 0.85rem;
-      border-radius: 9999px;
-      font-size: 0.78rem;
-      font-weight: 600;
-      letter-spacing: 0.04em;
-      text-transform: uppercase;
-      margin-bottom: 1.5rem;
-    }
-
-    .status-dot {
-      width: 8px; height: 8px;
-      background-color: var(--accent-emerald);
-      border-radius: 50%;
-      box-shadow: 0 0 10px var(--accent-emerald);
-    }
-
-    h1 { font-size: 1.65rem; font-weight: 700; margin-bottom: 0.5rem; }
-    p.subtitle { color: var(--text-muted); font-size: 0.95rem; line-height: 1.6; margin-bottom: 1.5rem; }
-
-    .nav-tabs {
-      display: flex; gap: 0.5rem; margin-bottom: 1.5rem; flex-wrap: wrap;
-      border-bottom: 1px solid var(--border-color); padding-bottom: 0.75rem;
-    }
-
-    .tab-btn {
-      background: transparent; border: 1px solid transparent; color: var(--text-muted);
-      padding: 0.5rem 1rem; border-radius: 8px; font-weight: 500; font-size: 0.875rem;
-      cursor: pointer; transition: all 0.2s;
-    }
-
-    .tab-btn:hover { color: var(--text-main); background: rgba(255, 255, 255, 0.05); }
-    .tab-btn.active { color: var(--accent-blue); background: rgba(88, 166, 255, 0.1); border-color: rgba(88, 166, 255, 0.3); }
-
-    .form-group { margin-bottom: 1.25rem; }
-    label { display: block; font-size: 0.85rem; font-weight: 600; margin-bottom: 0.5rem; color: var(--text-muted); }
-    input, select, button {
-      width: 100%; padding: 0.75rem 1rem; border-radius: 8px; font-size: 0.9rem;
-      font-family: inherit;
-    }
-    input, select {
-      background: rgba(13, 17, 23, 0.7); border: 1px solid var(--border-color); color: var(--text-main);
-    }
-    input:focus, select:focus { outline: none; border-color: var(--accent-blue); }
-
-    .btn-primary {
-      background: var(--accent-blue); color: #0d1117; border: none; font-weight: 600;
-      cursor: pointer; transition: opacity 0.2s; margin-top: 0.5rem;
-    }
-    .btn-primary:hover { opacity: 0.9; }
-
-    .btn-danger {
-      background: rgba(248, 81, 73, 0.15); color: var(--accent-red); border: 1px solid rgba(248, 81, 73, 0.3);
-      font-weight: 600; cursor: pointer; padding: 0.4rem 0.8rem; border-radius: 6px; width: auto;
-    }
-    .btn-danger:hover { background: rgba(248, 81, 73, 0.25); }
-
-    .table-container { width: 100%; overflow-x: auto; margin-top: 1rem; }
-    table { width: 100%; border-collapse: collapse; text-align: left; font-size: 0.875rem; }
-    th, td { padding: 0.75rem 1rem; border-bottom: 1px solid var(--border-color); }
-    th { color: var(--text-muted); font-weight: 600; }
-
-    .alert {
-      padding: 0.75rem 1rem; border-radius: 8px; font-size: 0.875rem; margin-bottom: 1rem; display: none;
-    }
-    .alert-error { background: rgba(248, 81, 73, 0.1); border: 1px solid rgba(248, 81, 73, 0.3); color: var(--accent-red); }
-    .alert-success { background: rgba(63, 185, 80, 0.1); border: 1px solid rgba(63, 185, 80, 0.3); color: var(--accent-emerald); }
-
-    .footer { text-align: center; font-size: 0.78rem; color: var(--text-muted); margin-top: 2rem; }
-  </style>
+  <title>Intranet Privada — Política Canon v0.4.0-alpha.5</title>
+  
+  <!-- B3: Extracción Determinista de Estilos Modularizados (Tokens, Base, Layout, Componentes) -->
+  <link rel="stylesheet" href="/styles/tokens.css">
+  <link rel="stylesheet" href="/styles/base.css">
+  <link rel="stylesheet" href="/styles/layout.css">
+  <link rel="stylesheet" href="/styles/components.css">
+  <script src="/js/confirm-dialog.js"></script>
+  <script src="/js/toast.js"></script>
+  <script src="/js/empty-state.js"></script>
 </head>
 <body>
-  <div class="container">
+  <!-- B2: Arquitectura de Layout Dinámico por Categoría -->
+  <div class="container layout-auth" id="mainContainer">
     <div class="card">
       <div class="header-badge">
         <span class="status-dot"></span> Intranet Segura · Nginx Gateway HTTPS
       </div>
-      <h1>Política Canon v0.3.30</h1>
-      <p class="subtitle">Plataforma Canónica de Gobernanza, Identidad Privada y Auditoría Inmutable.</p>
+      <p class="eyebrow">Gobernanza institucional</p>
+      <h1>Política Canon</h1>
+      <p class="subtitle">Identidad privada, decisiones trazables y auditoría inmutable en un único espacio de trabajo.</p>
 
-      <div class="nav-tabs" id="navTabs">
-        <button class="tab-btn active" onclick="showTab('loginTab')">Inicio de Sesión</button>
-        <button class="tab-btn" onclick="showTab('acceptTab')">Aceptar Invitación</button>
-        <button class="tab-btn" onclick="showTab('profileTab')">Mi Perfil</button>
-        <button class="tab-btn" onclick="showTab('sessionsTab')">Sesiones Activas</button>
-        <button class="tab-btn" onclick="showTab('invitationsTab')">Invitaciones</button>
-        <button class="tab-btn" onclick="showTab('usersTab')">Usuarios</button>
+      <!-- AUD-001: Estructura WAI-ARIA para Pestañas -->
+      <div class="nav-tabs" id="navTabs" role="tablist" aria-label="Secciones de la Intranet">
+        <button class="tab-btn active" id="tab-login" role="tab" aria-selected="true" aria-controls="loginTab" tabindex="0" onclick="showTab('loginTab', event)">Inicio de Sesión</button>
+        <button class="tab-btn" id="tab-accept" role="tab" aria-selected="false" aria-controls="acceptTab" tabindex="-1" onclick="showTab('acceptTab', event)">Aceptar Invitación</button>
+        <button class="tab-btn" id="tab-profile" role="tab" aria-selected="false" aria-controls="profileTab" tabindex="-1" onclick="showTab('profileTab', event)">Mi Perfil</button>
+        <button class="tab-btn" id="tab-sessions" role="tab" aria-selected="false" aria-controls="sessionsTab" tabindex="-1" onclick="showTab('sessionsTab', event)">Sesiones Activas</button>
+        <button class="tab-btn" id="tab-invitations" role="tab" aria-selected="false" aria-controls="invitationsTab" tabindex="-1" onclick="showTab('invitationsTab', event)">Invitaciones</button>
+        <button class="tab-btn" id="tab-users" role="tab" aria-selected="false" aria-controls="usersTab" tabindex="-1" onclick="showTab('usersTab', event)">Usuarios</button>
       </div>
 
-      <div id="alertBox" class="alert"></div>
+      <!-- AUD-009: Región ARIA Live para Alertas Contextuales -->
+      <div id="alertBox" class="alert" role="status" aria-live="polite"></div>
 
       <!-- Tab: Login -->
-      <div id="loginTab" class="tab-content">
+      <div id="loginTab" class="tab-content" role="tabpanel" tabindex="0" aria-labelledby="tab-login">
         <form id="loginForm" onsubmit="handleLogin(event)">
           <div class="form-group">
             <label for="loginEmail">Correo Electrónico</label>
@@ -158,12 +50,12 @@
             <label for="loginPassword">Contraseña</label>
             <input type="password" id="loginPassword" required placeholder="••••••••••••">
           </div>
-          <button type="submit" class="btn-primary">Iniciar Sesión</button>
+          <button type="submit" id="loginSubmitBtn" class="btn-primary">Iniciar Sesión</button>
         </form>
       </div>
 
       <!-- Tab: Accept Invitation -->
-      <div id="acceptTab" class="tab-content" style="display:none;">
+      <div id="acceptTab" class="tab-content" role="tabpanel" tabindex="0" aria-labelledby="tab-accept" style="display:none;">
         <form id="acceptForm" onsubmit="handleAcceptInvitation(event)">
           <div class="form-group">
             <label for="inviteToken">Token de Invitación (256-bit)</label>
@@ -177,30 +69,30 @@
             <label for="invitePassword">Nueva Contraseña (Política Fuerte)</label>
             <input type="password" id="invitePassword" required placeholder="••••••••••••">
           </div>
-          <button type="submit" class="btn-primary">Activar Cuenta</button>
+          <button type="submit" id="acceptSubmitBtn" class="btn-primary">Activar Cuenta</button>
         </form>
       </div>
 
       <!-- Tab: Profile -->
-      <div id="profileTab" class="tab-content" style="display:none;">
+      <div id="profileTab" class="tab-content" role="tabpanel" tabindex="0" aria-labelledby="tab-profile" style="display:none;">
         <div id="profileContent">Cargando perfil...</div>
       </div>
 
       <!-- Tab: Sessions -->
-      <div id="sessionsTab" class="tab-content" style="display:none;">
-        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem;">
+      <div id="sessionsTab" class="tab-content" role="tabpanel" tabindex="0" aria-labelledby="tab-sessions" style="display:none;">
+        <div class="section-heading">
           <h3>Sesiones Activas en la Cuenta</h3>
-          <button class="btn-danger" onclick="handleRevokeAllOtherSessions()">Revocar Todas las Demás</button>
+          <button class="btn-danger" id="revokeAllBtn" onclick="handleRevokeAllOtherSessions(event)">Revocar Todas las Demás</button>
         </div>
         <div class="table-container">
           <table id="sessionsTable">
             <thead>
               <tr>
-                <th>Dirección IP</th>
-                <th>Dispositivo / User-Agent</th>
-                <th>Creada</th>
-                <th>Estado</th>
-                <th>Acción</th>
+                <th scope="col">Dirección IP</th>
+                <th scope="col">Dispositivo / User-Agent</th>
+                <th scope="col">Creada</th>
+                <th scope="col">Estado</th>
+                <th scope="col">Acción</th>
               </tr>
             </thead>
             <tbody id="sessionsTableBody"></tbody>
@@ -209,9 +101,9 @@
       </div>
 
       <!-- Tab: Invitations -->
-      <div id="invitationsTab" class="tab-content" style="display:none;">
-        <h3>Emitir Nueva Invitación Privada</h3>
-        <form id="inviteForm" onsubmit="handleCreateInvitation(event)" style="margin-top:1rem; margin-bottom:2rem;">
+      <div id="invitationsTab" class="tab-content" role="tabpanel" tabindex="0" aria-labelledby="tab-invitations" style="display:none;">
+        <h3>Emitir Nueva Invitación</h3>
+        <form id="createInviteForm" onsubmit="handleCreateInvitation(event)" style="margin-bottom:2rem;">
           <div class="form-group">
             <label for="newInviteEmail">Correo del Destinatario</label>
             <input type="email" id="newInviteEmail" required placeholder="nuevo.usuario@ejemplo.com">
@@ -219,22 +111,23 @@
           <div class="form-group">
             <label for="newInviteRole">Rol Asignado</label>
             <select id="newInviteRole">
-              <option value="MEMBER">Miembro (MEMBER)</option>
-              <option value="COORDINATOR">Coordinador (COORDINATOR)</option>
+              <option value="WRITER">Redactor</option>
+              <option value="REVIEWER">Revisor</option>
+              <option value="COORDINATOR">Coordinador (solo administradores)</option>
             </select>
           </div>
-          <button type="submit" class="btn-primary">Emitir e Enviar Invitación por Correo</button>
+          <button type="submit" id="createInviteBtn" class="btn-primary">Generar e Invitar</button>
         </form>
 
-        <h3>Invitaciones Emitidas Pendientes</h3>
+        <h3>Invitaciones Pendientes / Emitidas</h3>
         <div class="table-container">
           <table id="invitationsTable">
             <thead>
               <tr>
-                <th>Email</th>
-                <th>Rol</th>
-                <th>Expiración</th>
-                <th>Acción</th>
+                <th scope="col">Correo</th>
+                <th scope="col">Rol</th>
+                <th scope="col">Expira</th>
+                <th scope="col">Acción</th>
               </tr>
             </thead>
             <tbody id="invitationsTableBody"></tbody>
@@ -243,17 +136,17 @@
       </div>
 
       <!-- Tab: Users -->
-      <div id="usersTab" class="tab-content" style="display:none;">
-        <h3>Usuarios de la Organización</h3>
+      <div id="usersTab" class="tab-content" role="tabpanel" tabindex="0" aria-labelledby="tab-users" style="display:none;">
+        <h3>Directorio de Usuarios del Sistema</h3>
         <div class="table-container">
           <table id="usersTable">
             <thead>
               <tr>
-                <th>Nombre Completo</th>
-                <th>Correo Electrónico</th>
-                <th>Estado</th>
-                <th>MFA</th>
-                <th>Acción</th>
+                <th scope="col">Nombre</th>
+                <th scope="col">Correo</th>
+                <th scope="col">Estado</th>
+                <th scope="col">MFA</th>
+                <th scope="col">Acción</th>
               </tr>
             </thead>
             <tbody id="usersTableBody"></tbody>
@@ -264,7 +157,7 @@
     </div>
 
     <div class="footer">
-      Política Canon v0.3.30 — Sistema Canónico de Gobernanza y Auditoría Inmutable
+      Política Canon v0.4.0-alpha.5 — Sistema Canónico de Gobernanza y Auditoría Inmutable
     </div>
   </div>
 
@@ -273,22 +166,68 @@
 
     function showAlert(msg, isError = false) {
       const box = document.getElementById('alertBox');
-      box.textContent = msg; // C-04: Seguro contra XSS (textContent)
+      box.textContent = msg;
       box.className = 'alert ' + (isError ? 'alert-error' : 'alert-success');
       box.style.display = 'block';
     }
 
     function hideAlert() {
-      document.getElementById('alertBox').style.display = 'none';
+      const box = document.getElementById('alertBox');
+      box.style.display = 'none';
     }
 
-    function showTab(tabId) {
+    // AUD-003: Helper para Estado de Carga e Inhabilitación de Botones
+    function setButtonLoading(btn, isLoading, loadingText = 'Cargando...') {
+      if (!btn) return;
+      if (isLoading) {
+        btn.dataset.originalText = btn.textContent;
+        btn.textContent = loadingText;
+        btn.disabled = true;
+        btn.setAttribute('aria-busy', 'true');
+      } else {
+        if (btn.dataset.originalText) btn.textContent = btn.dataset.originalText;
+        btn.disabled = false;
+        btn.removeAttribute('aria-busy');
+      }
+    }
+
+    // AUD-001 / B2: Navegación y Categorización Dinámica de Layout
+    function showTab(tabId, evt) {
       hideAlert();
       document.querySelectorAll('.tab-content').forEach(el => el.style.display = 'none');
-      document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+      document.querySelectorAll('.tab-btn').forEach(btn => {
+        btn.classList.remove('active');
+        btn.setAttribute('aria-selected', 'false');
+        btn.setAttribute('tabindex', '-1');
+      });
       
-      document.getElementById(tabId).style.display = 'block';
-      event.target.classList.add('active');
+      const targetPanel = document.getElementById(tabId);
+      if (targetPanel) targetPanel.style.display = 'block';
+
+      let targetBtn = evt ? (evt.currentTarget || evt.target) : null;
+      if (!targetBtn) {
+        targetBtn = document.querySelector(`.tab-btn[aria-controls="${tabId}"]`);
+      }
+      if (targetBtn) {
+        targetBtn.classList.add('active');
+        targetBtn.setAttribute('aria-selected', 'true');
+        targetBtn.setAttribute('tabindex', '0');
+      }
+
+      // B2: Layout architecture by category
+      const mainContainer = document.getElementById('mainContainer');
+      if (mainContainer) {
+        mainContainer.className = 'container';
+        if (tabId === 'loginTab' || tabId === 'acceptTab') {
+          mainContainer.classList.add('layout-auth');
+        } else if (tabId === 'profileTab') {
+          mainContainer.classList.add('layout-content');
+        } else if (tabId === 'invitationsTab') {
+          mainContainer.classList.add('layout-admin');
+        } else if (tabId === 'sessionsTab' || tabId === 'usersTab') {
+          mainContainer.classList.add('layout-data-heavy');
+        }
+      }
 
       if (tabId === 'sessionsTab') loadSessions();
       if (tabId === 'invitationsTab') loadInvitations();
@@ -296,11 +235,45 @@
       if (tabId === 'profileTab') loadProfile();
     }
 
+    // AUD-001: Navegación por Teclado (Flechas Izquierda / Derecha, Home, End)
+    document.addEventListener('DOMContentLoaded', () => {
+      const tablist = document.getElementById('navTabs');
+      if (!tablist) return;
+
+      tablist.addEventListener('keydown', (e) => {
+        const tabs = Array.from(tablist.querySelectorAll('.tab-btn'));
+        const currentIndex = tabs.indexOf(document.activeElement);
+
+        if (currentIndex === -1) return;
+
+        let newIndex = currentIndex;
+        if (e.key === 'ArrowRight') {
+          newIndex = (currentIndex + 1) % tabs.length;
+        } else if (e.key === 'ArrowLeft') {
+          newIndex = (currentIndex - 1 + tabs.length) % tabs.length;
+        } else if (e.key === 'Home') {
+          newIndex = 0;
+        } else if (e.key === 'End') {
+          newIndex = tabs.length - 1;
+        } else {
+          return;
+        }
+
+        e.preventDefault();
+        tabs[newIndex].focus();
+        const tabControls = tabs[newIndex].getAttribute('aria-controls');
+        showTab(tabControls, { currentTarget: tabs[newIndex] });
+      });
+    });
+
     async function handleLogin(e) {
       e.preventDefault();
       hideAlert();
+      const submitBtn = document.getElementById('loginSubmitBtn');
       const email = document.getElementById('loginEmail').value;
       const password = document.getElementById('loginPassword').value;
+
+      setButtonLoading(submitBtn, true, 'Iniciando Sesión...');
 
       try {
         const res = await fetch('/api/v1/auth/login', {
@@ -316,15 +289,20 @@
         showTab('profileTab');
       } catch (err) {
         showAlert(err.message, true);
+      } finally {
+        setButtonLoading(submitBtn, false);
       }
     }
 
     async function handleAcceptInvitation(e) {
       e.preventDefault();
       hideAlert();
+      const submitBtn = document.getElementById('acceptSubmitBtn');
       const token = document.getElementById('inviteToken').value;
       const fullName = document.getElementById('inviteName').value;
       const password = document.getElementById('invitePassword').value;
+
+      setButtonLoading(submitBtn, true, 'Activando Cuenta...');
 
       try {
         const res = await fetch('/api/v1/invitations/accept', {
@@ -335,42 +313,50 @@
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || 'Error al aceptar invitación');
         
-        showAlert('Cuenta activada exitosamente. Ya puede iniciar sesión.');
+        showAlert('Cuenta activada con éxito. Ya puedes iniciar sesión.');
+        showTab('loginTab');
       } catch (err) {
         showAlert(err.message, true);
+      } finally {
+        setButtonLoading(submitBtn, false);
       }
     }
 
     async function loadProfile() {
       const container = document.getElementById('profileContent');
-      container.textContent = ''; // Limpiar de forma segura
-
+      container.textContent = '';
       try {
         const res = await fetch('/api/v1/auth/me');
         if (!res.ok) {
-          container.textContent = 'Requiere sesión autenticada.';
+          const message = document.createElement('p');
+          message.className = 'text-muted';
+          message.textContent = 'Debes iniciar sesión para ver tu perfil.';
+          container.appendChild(message);
           return;
         }
         const data = await res.json();
-        
-        // C-04: Construcción segura de DOM con textContent
-        const div = document.createElement('div');
-        
-        const p1 = document.createElement('p');
-        p1.textContent = 'Usuario: ' + data.user.fullName + ' (' + data.user.email + ')';
-        
-        const p2 = document.createElement('p');
-        p2.textContent = 'MFA Habilitado: ' + (data.user.mfaEnabled ? 'Sí' : 'No');
-
-        const p3 = document.createElement('p');
-        p3.textContent = 'Organización Activa: ' + data.session.organizationId;
-
-        div.appendChild(p1);
-        div.appendChild(p2);
-        div.appendChild(p3);
-        container.appendChild(div);
+        const user = data.user || {};
+        const roles = Array.isArray(data.authContext?.roles) ? data.authContext.roles.join(', ') : 'Sin rol efectivo';
+        const profile = document.createElement('dl');
+        profile.className = 'profile-grid';
+        const appendField = (label, value) => {
+          const term = document.createElement('dt');
+          term.textContent = label;
+          const description = document.createElement('dd');
+          description.textContent = value;
+          profile.append(term, description);
+        };
+        appendField('Nombre', user.fullName || 'Sin nombre');
+        appendField('Correo', user.email || 'Sin correo');
+        appendField('Roles efectivos', roles);
+        appendField('MFA activado', user.mfaEnabled ? 'Sí' : 'No');
+        appendField('Organización activa', data.session?.organizationId || 'Sin organización');
+        container.appendChild(profile);
       } catch (err) {
-        container.textContent = 'Error al cargar perfil.';
+        const message = document.createElement('p');
+        message.className = 'text-danger';
+        message.textContent = 'No se pudo cargar el perfil. Inténtalo de nuevo.';
+        container.appendChild(message);
       }
     }
 
@@ -380,8 +366,24 @@
 
       try {
         const res = await fetch('/api/v1/sessions');
-        if (!res.ok) return;
+        if (!res.ok) {
+          if (res.status === 401 || res.status === 403) throw new Error('permission');
+          throw new Error('server');
+        }
         const data = await res.json();
+
+        // AUD-008: Renderizado de Estado Vacío en ausencia de registros
+        if (!data.sessions || data.sessions.length === 0) {
+          if (typeof renderEmptyState === 'function') {
+            renderEmptyState(tbody, {
+              title: 'No hay sesiones activas adicionales',
+              description: 'Únicamente tu sesión actual se encuentra registrada en la plataforma.',
+              icon: '💻',
+              colspan: 5
+            });
+          }
+          return;
+        }
 
         // C-04: Renderizado seguro de tabla mediante APIs DOM estándar sin innerHTML
         data.sessions.forEach(s => {
@@ -404,7 +406,7 @@
             const btn = document.createElement('button');
             btn.className = 'btn-danger';
             btn.textContent = 'Revocar';
-            btn.onclick = () => handleRevokeSession(s.id);
+            btn.onclick = (e) => handleRevokeSession(s.id, e.currentTarget);
             tdAction.appendChild(btn);
           } else {
             tdAction.textContent = '-';
@@ -419,35 +421,61 @@
         });
       } catch (err) {
         console.error('Error cargando sesiones:', err);
+        // M-C03: Estado diferenciado — permission vs error vs empty
+        if (typeof renderErrorState === 'function') {
+          const isPermission = err.message === 'permission';
+          renderErrorState(tbody, {
+            title: isPermission ? 'No tienes permisos para consultar las sesiones' : 'No se pudieron cargar las sesiones',
+            description: isPermission ? 'Inicia sesión o contacta al administrador para obtener acceso.' : 'Error al conectar con el servidor. Inténtalo de nuevo.',
+            icon: isPermission ? '🔒' : '⚠',
+            colspan: 5
+          });
+        }
       }
     }
 
-    async function handleRevokeSession(sessionId) {
-      try {
-        const res = await fetch('/api/v1/sessions/' + sessionId, {
-          method: 'DELETE',
-          headers: { 'x-csrf-token': csrfToken }
-        });
-        if (!res.ok) throw new Error('Error al revocar sesión');
-        showAlert('Sesión revocada exitosamente.');
-        loadSessions();
-      } catch (err) {
-        showAlert(err.message, true);
-      }
+    // B1: Acciones Destructivas Accesibles via ConfirmDialog
+    function handleRevokeSession(sessionId, invokerEl) {
+      showConfirmDialog({
+        title: 'Revocar Sesión Individual',
+        resource: `Sesión ID: ${sessionId}`,
+        consequence: 'Se cerrará inmediatamente la sesión en el dispositivo remoto correspondiente.',
+        scope: 'Sesión Específica',
+        reversible: 'No',
+        confirmText: 'Revocar Sesión',
+        invokerEl: invokerEl,
+        onConfirm: async () => {
+          const res = await fetch('/api/v1/sessions/' + sessionId, {
+            method: 'DELETE',
+            headers: { 'x-csrf-token': csrfToken }
+          });
+          if (!res.ok) throw new Error('Error al revocar sesión');
+          showAlert('Sesión revocada exitosamente.');
+          loadSessions();
+        }
+      });
     }
 
-    async function handleRevokeAllOtherSessions() {
-      try {
-        const res = await fetch('/api/v1/sessions/all', {
-          method: 'DELETE',
-          headers: { 'x-csrf-token': csrfToken }
-        });
-        if (!res.ok) throw new Error('Error al revocar las demás sesiones');
-        showAlert('Todas las demás sesiones han sido revocadas.');
-        loadSessions();
-      } catch (err) {
-        showAlert(err.message, true);
-      }
+    function handleRevokeAllOtherSessions(evtOrEl) {
+      const invokerEl = evtOrEl && evtOrEl.currentTarget ? evtOrEl.currentTarget : (evtOrEl instanceof HTMLElement ? evtOrEl : document.getElementById('revokeAllBtn'));
+      showConfirmDialog({
+        title: 'Revocar Todas las Demás Sesiones',
+        resource: 'Todas las sesiones activas excepto la actual',
+        consequence: 'Se cerrarán las sesiones en todos los demás dispositivos conectados a esta cuenta.',
+        scope: 'Todas las demás sesiones activas',
+        reversible: 'No',
+        confirmText: 'Revocar Todas',
+        invokerEl: invokerEl,
+        onConfirm: async () => {
+          const res = await fetch('/api/v1/sessions/all', {
+            method: 'DELETE',
+            headers: { 'x-csrf-token': csrfToken }
+          });
+          if (!res.ok) throw new Error('Error al revocar las demás sesiones');
+          showAlert('Todas las demás sesiones han sido revocadas.');
+          loadSessions();
+        }
+      });
     }
 
     async function loadInvitations() {
@@ -456,8 +484,24 @@
 
       try {
         const res = await fetch('/api/v1/invitations');
-        if (!res.ok) return;
+        if (!res.ok) {
+          if (res.status === 401 || res.status === 403) throw new Error('permission');
+          throw new Error('server');
+        }
         const data = await res.json();
+
+        // AUD-008: Renderizado de Estado Vacío en ausencia de invitaciones pendientes
+        if (!data.invitations || data.invitations.length === 0) {
+          if (typeof renderEmptyState === 'function') {
+            renderEmptyState(tbody, {
+              title: 'No hay invitaciones pendientes',
+              description: 'Utiliza el formulario superior para emitir una nueva invitación privada.',
+              icon: '✉️',
+              colspan: 4
+            });
+          }
+          return;
+        }
 
         data.invitations.forEach(inv => {
           const tr = document.createElement('tr');
@@ -475,7 +519,7 @@
           const btn = document.createElement('button');
           btn.className = 'btn-danger';
           btn.textContent = 'Revocar';
-          btn.onclick = () => handleRevokeInvitation(inv.id);
+          btn.onclick = (e) => handleRevokeInvitation(inv.id, inv.email, e.currentTarget);
           tdAction.appendChild(btn);
 
           tr.appendChild(tdEmail);
@@ -486,14 +530,27 @@
         });
       } catch (err) {
         console.error('Error cargando invitaciones:', err);
+        // M-C03: Estado diferenciado — permission vs error vs empty
+        if (typeof renderErrorState === 'function') {
+          const isPermission = err.message === 'permission';
+          renderErrorState(tbody, {
+            title: isPermission ? 'No tienes permisos para consultar las invitaciones' : 'No se pudieron cargar las invitaciones',
+            description: isPermission ? 'Inicia sesión o contacta al administrador para obtener acceso.' : 'Error al conectar con el servidor. Inténtalo de nuevo.',
+            icon: isPermission ? '🔒' : '⚠',
+            colspan: 4
+          });
+        }
       }
     }
 
     async function handleCreateInvitation(e) {
       e.preventDefault();
       hideAlert();
+      const submitBtn = document.getElementById('createInviteBtn');
       const email = document.getElementById('newInviteEmail').value;
       const role = document.getElementById('newInviteRole').value;
+
+      setButtonLoading(submitBtn, true, 'Emitiendo Invitación...');
 
       try {
         const res = await fetch('/api/v1/invitations', {
@@ -511,21 +568,30 @@
         loadInvitations();
       } catch (err) {
         showAlert(err.message, true);
+      } finally {
+        setButtonLoading(submitBtn, false);
       }
     }
 
-    async function handleRevokeInvitation(id) {
-      try {
-        const res = await fetch('/api/v1/invitations/' + id, {
-          method: 'DELETE',
-          headers: { 'x-csrf-token': csrfToken }
-        });
-        if (!res.ok) throw new Error('Error al revocar invitación');
-        showAlert('Invitación revocada.');
-        loadInvitations();
-      } catch (err) {
-        showAlert(err.message, true);
-      }
+    function handleRevokeInvitation(id, email, invokerEl) {
+      showConfirmDialog({
+        title: 'Revocar Invitación',
+        resource: `Invitación para: ${email || id}`,
+        consequence: 'El destinatario no podrá utilizar el token de invitación para registrarse.',
+        scope: 'Invitación Individual',
+        reversible: 'No',
+        confirmText: 'Revocar Invitación',
+        invokerEl: invokerEl,
+        onConfirm: async () => {
+          const res = await fetch('/api/v1/invitations/' + id, {
+            method: 'DELETE',
+            headers: { 'x-csrf-token': csrfToken }
+          });
+          if (!res.ok) throw new Error('Error al revocar invitación');
+          showAlert('Invitación revocada.');
+          loadInvitations();
+        }
+      });
     }
 
     async function loadUsers() {
@@ -534,8 +600,24 @@
 
       try {
         const res = await fetch('/api/v1/users');
-        if (!res.ok) return;
+        if (!res.ok) {
+          if (res.status === 401 || res.status === 403) throw new Error('permission');
+          throw new Error('server');
+        }
         const data = await res.json();
+
+        // AUD-008: Renderizado de Estado Vacío en caso de lista vacía
+        if (!data.users || data.users.length === 0) {
+          if (typeof renderEmptyState === 'function') {
+            renderEmptyState(tbody, {
+              title: 'Directorio de usuarios vacío',
+              description: 'No se encontraron usuarios registrados en la organización.',
+              icon: '👥',
+              colspan: 5
+            });
+          }
+          return;
+        }
 
         data.users.forEach(u => {
           const tr = document.createElement('tr');
@@ -556,7 +638,7 @@
           const btn = document.createElement('button');
           btn.className = 'btn-danger';
           btn.textContent = u.isActive ? 'Desactivar' : 'Activar';
-          btn.onclick = () => handleToggleUserStatus(u.id, !u.isActive);
+          btn.onclick = (e) => handleToggleUserStatus(u.id, !u.isActive, u.fullName || u.email, e.currentTarget);
           tdAction.appendChild(btn);
 
           tr.appendChild(tdName);
@@ -568,26 +650,46 @@
         });
       } catch (err) {
         console.error('Error cargando usuarios:', err);
+        // M-C03: Estado diferenciado — permission vs error vs empty
+        if (typeof renderErrorState === 'function') {
+          const isPermission = err.message === 'permission';
+          renderErrorState(tbody, {
+            title: isPermission ? 'No tienes permisos para consultar los usuarios' : 'No se pudieron cargar los usuarios',
+            description: isPermission ? 'Inicia sesión o contacta al administrador para obtener acceso.' : 'Error al conectar con el servidor. Inténtalo de nuevo.',
+            icon: isPermission ? '🔒' : '⚠',
+            colspan: 5
+          });
+        }
       }
     }
 
-    async function handleToggleUserStatus(userId, newStatus) {
-      try {
-        const res = await fetch('/api/v1/users/' + userId + '/status', {
-          method: 'PATCH',
-          headers: {
-            'Content-Type': 'application/json',
-            'x-csrf-token': csrfToken
-          },
-          body: JSON.stringify({ isActive: newStatus })
-        });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error || 'Error al cambiar estado de usuario');
-        showAlert('Estado de usuario actualizado.');
-        loadUsers();
-      } catch (err) {
-        showAlert(err.message, true);
-      }
+    function handleToggleUserStatus(userId, newStatus, userIdentifier, invokerEl) {
+      const actionName = newStatus ? 'Activar' : 'Desactivar';
+      showConfirmDialog({
+        title: `${actionName} Usuario`,
+        resource: `Usuario: ${userIdentifier}`,
+        consequence: newStatus 
+          ? 'El usuario podrá volver a iniciar sesión y acceder a la plataforma.'
+          : 'El usuario perderá el acceso a la plataforma y no podrá iniciar sesión.',
+        scope: 'Acceso de Usuario',
+        reversible: 'Sí',
+        confirmText: `${actionName} Usuario`,
+        invokerEl: invokerEl,
+        onConfirm: async () => {
+          const res = await fetch('/api/v1/users/' + userId + '/status', {
+            method: 'PATCH',
+            headers: {
+              'Content-Type': 'application/json',
+              'x-csrf-token': csrfToken
+            },
+            body: JSON.stringify({ isActive: newStatus })
+          });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error || 'Error al cambiar estado de usuario');
+          showAlert('Estado de usuario actualizado.');
+          loadUsers();
+        }
+      });
     }
   </script>
 </body>

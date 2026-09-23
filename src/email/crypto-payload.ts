@@ -6,7 +6,10 @@ function deriveKey(secret: string): Buffer {
 }
 
 function getPrimaryEncryptionKey(): Buffer {
-  const secret = config.emailOutboxEncryptionKey || config.mfaMasterKey || config.sessionSecret || '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef';
+  const secret = config.emailOutboxEncryptionKey;
+  if (!secret) {
+    throw new Error('EMAIL_OUTBOX_ENCRYPTION_KEY_REQUIRED');
+  }
   return deriveKey(secret);
 }
 
@@ -43,6 +46,20 @@ function tryDecryptWithKey(key: Buffer, ivHex: string, tagHex: string, cipherHex
   }
 }
 
+function assertEncryptedPayloadParts(parts: string[]): [string, string, string] {
+  if (parts.length !== 3) {
+    throw new Error('PAYLOAD_DECRYPTION_FAILED');
+  }
+
+  const [ivHex, tagHex, cipherHex] = parts;
+  const isHex = (value: string): boolean => value.length > 0 && value.length % 2 === 0 && /^[0-9a-f]+$/i.test(value);
+  if (!isHex(ivHex) || !isHex(tagHex) || !isHex(cipherHex) || ivHex.length !== 24 || tagHex.length !== 32) {
+    throw new Error('PAYLOAD_DECRYPTION_FAILED');
+  }
+
+  return [ivHex, tagHex, cipherHex];
+}
+
 /**
  * Cifra un token en texto claro usando AES-256-GCM para almacenamiento seguro en reposo en email_outbox (H-01, H-03).
  * Retorna una cadena codificada con versión de clave en formato `v1:enc:<iv_hex>:<authTag_hex>:<ciphertext_hex>`.
@@ -77,16 +94,15 @@ export function decryptPayloadToken(encryptedToken: string): string {
     return encryptedToken;
   }
 
-  if (parts.length !== 3) {
-    return encryptedToken;
-  }
-
-  const [ivHex, tagHex, cipherHex] = parts;
+  const [ivHex, tagHex, cipherHex] = assertEncryptedPayloadParts(parts);
 
   if (isV1) {
     const primaryKey = getPrimaryEncryptionKey();
     const result = tryDecryptWithKey(primaryKey, ivHex, tagHex, cipherHex);
-    return result !== null ? result : encryptedToken;
+    if (result === null) {
+      throw new Error('PAYLOAD_DECRYPTION_FAILED');
+    }
+    return result;
   }
 
   // H-01: Para formato legacy enc:, probar la clave primaria y las claves de respaldo (emailOutboxLegacyKeyV0 / mfaMasterKey)
@@ -98,5 +114,5 @@ export function decryptPayloadToken(encryptedToken: string): string {
     }
   }
 
-  return encryptedToken;
+  throw new Error('PAYLOAD_DECRYPTION_FAILED');
 }

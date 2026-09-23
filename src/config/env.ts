@@ -1,5 +1,5 @@
+import crypto from 'node:crypto';
 import dotenv from 'dotenv';
-import path from 'path';
 
 // Load .env if present (for local dev), systemd EnvironmentFile takes precedence in production
 dotenv.config();
@@ -34,8 +34,6 @@ function validateConfig(): AppConfig {
   const emailWorkerDatabaseUrl = process.env.EMAIL_WORKER_DATABASE_URL;
   const redisUrl = process.env.REDIS_URL;
   const sessionSecret = process.env.SESSION_SECRET;
-  const mfaMasterKey = process.env.MFA_MASTER_KEY || process.env.SESSION_SECRET; // Fallback for dev if not set
-  const emailOutboxEncryptionKey = process.env.EMAIL_OUTBOX_ENCRYPTION_KEY || process.env.MFA_MASTER_KEY || process.env.SESSION_SECRET;
   const emailOutboxLegacyKeyV0 = process.env.EMAIL_OUTBOX_LEGACY_KEY_V0 || process.env.MFA_MASTER_KEY;
 
   const smtpHost = process.env.SMTP_HOST;
@@ -66,13 +64,15 @@ function validateConfig(): AppConfig {
     process.exit(1);
   }
 
-  const effectiveMfaMasterKey = process.env.MFA_MASTER_KEY || (nodeEnv === 'test' ? '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef_mfa' : '');
+  const ephemeralTestMfaKey = nodeEnv === 'test' ? crypto.randomBytes(32).toString('hex') : '';
+  const effectiveMfaMasterKey = process.env.MFA_MASTER_KEY || ephemeralTestMfaKey;
   if (!effectiveMfaMasterKey || effectiveMfaMasterKey.length < 32) {
     console.error('[FATAL] Configuration validation failed closed. MFA_MASTER_KEY must be at least 32 characters in length.');
     process.exit(1);
   }
 
-  const effectiveOutboxKey = process.env.EMAIL_OUTBOX_ENCRYPTION_KEY || (nodeEnv === 'test' ? '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef_outbox' : effectiveMfaMasterKey);
+  const ephemeralTestOutboxKey = nodeEnv === 'test' ? crypto.randomBytes(32).toString('hex') : '';
+  const effectiveOutboxKey = process.env.EMAIL_OUTBOX_ENCRYPTION_KEY || ephemeralTestOutboxKey || effectiveMfaMasterKey;
   if (!effectiveOutboxKey || effectiveOutboxKey.length < 32) {
     console.error('[FATAL] Configuration validation failed closed. EMAIL_OUTBOX_ENCRYPTION_KEY must be at least 32 characters in length.');
     process.exit(1);

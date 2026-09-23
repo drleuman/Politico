@@ -1,0 +1,10 @@
+{
+    "version":  "0.4.0-alpha.2",
+    "releaseDate":  "2026-09-18",
+    "packageName":  "politica-canon-v0.4.0-alpha.2.zip",
+    "sizeBytes":  138009,
+    "sha256":  "8289bc861218896f2dac6399528661f1526d1da4ca3906c809c411211c4c4785",
+    "fileCount":  54,
+    "canonicalDatabaseEngine":  "PostgreSQL 16+",
+    "dictamen":  "PASS (RELEASE CANDIDATE V0.4.0-ALPHA.2 - FASE B COMPONENT ARCHITECTURE)"
+}

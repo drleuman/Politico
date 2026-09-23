@@ -1,29 +1,43 @@
 import { execSync } from 'child_process';
+import crypto from 'node:crypto';
 import pg from 'pg';
 import http from 'http';
 const { Client } = pg;
 
-console.log('=== RUNNER DE INTEGRACIÓN REAL POSTGRESQL 16, REDIS 7 & MAILPIT SMTP (v0.3.30 CERTIFICADO) ===\n');
+console.log('=== RUNNER DE INTEGRACIÓN REAL POSTGRESQL 16, REDIS 7 & MAILPIT SMTP (v0.4.0-alpha.5) ===\n');
 
-const ADMIN_URL = process.env.POLITICA_CANON_ADMIN_DATABASE_URL || 'postgresql://postgres:audit_dev_only_secret_do_not_use_in_prod@127.0.0.1:15432/politica_canon';
+const ephemeralSecret = () => crypto.randomBytes(32).toString('hex');
+const testPassword = (label) => `${label}-${crypto.randomBytes(18).toString('base64url')}!Aa1`;
+const POSTGRES_PASSWORD = process.env.POSTGRES_PASSWORD || ephemeralSecret();
+const ADMIN_URL = process.env.POLITICA_CANON_ADMIN_DATABASE_URL || `postgresql://postgres:${encodeURIComponent(POSTGRES_PASSWORD)}@127.0.0.1:15432/politica_canon`;
 const MIGRATION_URL = process.env.MIGRATION_DATABASE_URL || ADMIN_URL;
-const APP_TEST_PASSWORD = process.env.POLITICA_CANON_APP_TEST_PASSWORD || 'audit_dev_only_secret_do_not_use_in_prod';
+const APP_TEST_PASSWORD = process.env.POLITICA_CANON_APP_TEST_PASSWORD || ephemeralSecret();
 const APP_URL = process.env.DATABASE_URL || `postgresql://politica_canon_app:${APP_TEST_PASSWORD}@127.0.0.1:15432/politica_canon`;
 const WORKER_URL = process.env.EMAIL_WORKER_DATABASE_URL || `postgresql://politica_canon_email_worker:${APP_TEST_PASSWORD}@127.0.0.1:15432/politica_canon`;
 const REDIS_URL = process.env.REDIS_URL || 'redis://127.0.0.1:16379/0';
-const SESSION_SECRET = process.env.SESSION_SECRET || '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef';
-const MFA_MASTER_KEY = process.env.MFA_MASTER_KEY || 'fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210';
+const SESSION_SECRET = process.env.SESSION_SECRET || ephemeralSecret();
+const MFA_MASTER_KEY = process.env.MFA_MASTER_KEY || ephemeralSecret();
+const EMAIL_OUTBOX_ENCRYPTION_KEY = process.env.EMAIL_OUTBOX_ENCRYPTION_KEY || ephemeralSecret();
+const ADMIN_PASSWORD = testPassword('admin');
+const ADMIN_WRONG_PASSWORD = testPassword('admin-wrong');
+const INVITED_USER_PASSWORD = testPassword('invited');
+const RESET_OLD_PASSWORD = testPassword('reset-old');
+const RESET_NEW_PASSWORD = testPassword('reset-new');
+const COORDINATOR_PASSWORD = testPassword('coordinator');
+const MFA_USER_PASSWORD = testPassword('mfa-user');
 const APP_BASE_URL = process.env.APP_BASE_URL || 'https://peaceful-johnson.194-164-175-146.plesk.page';
 const SMTP_HOST = process.env.SMTP_HOST || '127.0.0.1';
 const SMTP_PORT = process.env.SMTP_PORT || '11025';
 
 process.env.POLITICA_CANON_ADMIN_DATABASE_URL = ADMIN_URL;
+process.env.POSTGRES_PASSWORD = POSTGRES_PASSWORD;
 process.env.MIGRATION_DATABASE_URL = MIGRATION_URL;
 process.env.DATABASE_URL = APP_URL;
 process.env.EMAIL_WORKER_DATABASE_URL = WORKER_URL;
 process.env.REDIS_URL = REDIS_URL;
 process.env.SESSION_SECRET = SESSION_SECRET;
 process.env.MFA_MASTER_KEY = MFA_MASTER_KEY;
+process.env.EMAIL_OUTBOX_ENCRYPTION_KEY = EMAIL_OUTBOX_ENCRYPTION_KEY;
 process.env.APP_BASE_URL = APP_BASE_URL;
 process.env.SMTP_HOST = SMTP_HOST;
 process.env.SMTP_PORT = SMTP_PORT;
@@ -198,12 +212,12 @@ async function runIntegrationTest() {
       await adminClient.end();
     }
 
-    // VERIFICACIÓN CON SERVICIOS REALES FASTIFY (FASE 1.1: ADVERSARIAL SECURITY v0.3.30)
-    console.log('\n--- VERIFICACIÓN DE SEGURIDAD ADVERSARIAL FASE 1.1 (PG16 + REDIS 7 + MAILPIT SMTP — RELEASE v0.3.30) ---');
+    // VERIFICACIÓN CON SERVICIOS REALES FASTIFY (FASE 1.1: ADVERSARIAL SECURITY v0.4.0-alpha.5)
+    console.log('\n--- VERIFICACIÓN DE SEGURIDAD ADVERSARIAL FASE 1.1 (PG16 + REDIS 7 + MAILPIT SMTP — RELEASE v0.4.0-alpha.5) ---');
     
     const { hashPassword } = await import('../dist/auth/crypto.js');
     
-    const adminPassHash = await hashPassword('PasswordSecura123!');
+    const adminPassHash = await hashPassword(ADMIN_PASSWORD);
 
     const setupClient = new Client({ connectionString: ADMIN_URL });
     await setupClient.connect();
@@ -250,12 +264,12 @@ async function runIntegrationTest() {
     const badLogin1 = await fastifyApp.inject({
       method: 'POST',
       url: '/api/v1/auth/login',
-      payload: { email: 'inexistente@test.canon', password: 'PasswordSecura123!' }
+      payload: { email: 'inexistente@test.canon', password: ADMIN_PASSWORD }
     });
     const badLogin2 = await fastifyApp.inject({
       method: 'POST',
       url: '/api/v1/auth/login',
-      payload: { email: 'admin@test.canon', password: 'PasswordIncorrecta!' }
+      payload: { email: 'admin@test.canon', password: ADMIN_WRONG_PASSWORD }
     });
     if (badLogin1.statusCode !== 401 || badLogin2.statusCode !== 401 || badLogin1.payload !== badLogin2.payload) {
       throw new Error(`CRITICAL FAIL H-02: Login expose respuestas distintas: ${badLogin1.payload} vs ${badLogin2.payload}`);
@@ -266,7 +280,7 @@ async function runIntegrationTest() {
     const loginRes = await fastifyApp.inject({
       method: 'POST',
       url: '/api/v1/auth/login',
-      payload: { email: 'admin@test.canon', password: 'PasswordSecura123!', organizationId: orgId }
+      payload: { email: 'admin@test.canon', password: ADMIN_PASSWORD, organizationId: orgId }
     });
     const loginBody = JSON.parse(loginRes.payload);
     if (loginRes.statusCode !== 200 || loginBody.token || loginBody.rawToken) {
@@ -310,6 +324,20 @@ async function runIntegrationTest() {
       }
     }
     if (!mailpitReady) throw new Error('CRITICAL FAIL M-03: Mailpit API en 18025 no estuvo disponible a tiempo.');
+
+    const forbiddenAdminInvite = await fastifyApp.inject({
+      method: 'POST',
+      url: '/api/v1/invitations',
+      headers: {
+        cookie: `__Host-sid=${adminSessionCookie}; csrf=${csrfTokenCookie}`,
+        'x-csrf-token': csrfTokenCookie,
+      },
+      payload: { email: 'escalation@test.canon', role: 'ADMIN', workspaceId: wsId },
+    });
+    if (forbiddenAdminInvite.statusCode !== 403 || !forbiddenAdminInvite.payload.includes('INVITATION_ROLE_NOT_DELEGABLE')) {
+      throw new Error(`CRITICAL FAIL RBAC: ADMIN pudo delegar ADMIN por invitación: ${forbiddenAdminInvite.payload}`);
+    }
+    console.log('✅ RBAC: la delegación directa de ADMIN por invitación fue rechazada.');
 
     const invRes = await fastifyApp.inject({
       method: 'POST',
@@ -368,7 +396,7 @@ async function runIntegrationTest() {
       payload: {
         token: invitationToken,
         fullName: 'Escritor Remediado',
-        password: 'PasswordNuevo123!',
+        password: INVITED_USER_PASSWORD,
       },
     });
     const acceptBody = JSON.parse(acceptRes.payload);
@@ -381,7 +409,7 @@ async function runIntegrationTest() {
     console.log('\n--- PRUEBA E2E C-01 & C-03: RESTABLECIMIENTO DE CONTRASEÑA Y REVOCACIÓN CROSS-ORGANIZATION ---');
     const resetUserEmail = 'reset.user@test.canon';
     const resetUserId = '66666666-6666-6666-6666-666666666666';
-    const resetUserPassHash = await hashPassword('PasswordResetOld123!');
+    const resetUserPassHash = await hashPassword(RESET_OLD_PASSWORD);
     
     const dbClientC01 = new Client({ connectionString: ADMIN_URL });
     await dbClientC01.connect();
@@ -403,7 +431,7 @@ async function runIntegrationTest() {
     const resetLoginRes1 = await fastifyApp.inject({
       method: 'POST',
       url: '/api/v1/auth/login',
-      payload: { email: resetUserEmail, password: 'PasswordResetOld123!', organizationId: orgId }
+      payload: { email: resetUserEmail, password: RESET_OLD_PASSWORD, organizationId: orgId }
     });
     const resetSessionCookieOrg1 = extractCookie(resetLoginRes1, '__Host-sid');
 
@@ -411,7 +439,7 @@ async function runIntegrationTest() {
     const resetLoginRes2 = await fastifyApp.inject({
       method: 'POST',
       url: '/api/v1/auth/login',
-      payload: { email: resetUserEmail, password: 'PasswordResetOld123!', organizationId: otherOrgId }
+      payload: { email: resetUserEmail, password: RESET_OLD_PASSWORD, organizationId: otherOrgId }
     });
     const resetSessionCookieOrg2 = extractCookie(resetLoginRes2, '__Host-sid');
 
@@ -456,7 +484,7 @@ async function runIntegrationTest() {
     const executeResetRes = await fastifyApp.inject({
       method: 'POST',
       url: '/api/v1/auth/reset-password',
-      payload: { token: resetToken, newPassword: 'PasswordResetNew123!' }
+      payload: { token: resetToken, newPassword: RESET_NEW_PASSWORD }
     });
     if (executeResetRes.statusCode !== 200) throw new Error(`reset-password falló: ${executeResetRes.payload}`);
 
@@ -499,7 +527,7 @@ async function runIntegrationTest() {
     const dbClientC02 = new Client({ connectionString: ADMIN_URL });
     await dbClientC02.connect();
 
-    const coordPassHash = await hashPassword('PasswordCoord123!');
+    const coordPassHash = await hashPassword(COORDINATOR_PASSWORD);
     await dbClientC02.query(`
       INSERT INTO users (id, email, full_name, is_active, mfa_enabled) VALUES ('${multiRoleUserId}', 'multirole@test.canon', 'User WRITER+ADMIN', TRUE, FALSE) ON CONFLICT (id) DO NOTHING;
       INSERT INTO organization_memberships (organization_id, user_id, is_active) VALUES ('${orgId}', '${multiRoleUserId}', TRUE) ON CONFLICT (organization_id, user_id) DO NOTHING;
@@ -521,7 +549,7 @@ async function runIntegrationTest() {
     const coordLoginRes = await fastifyApp.inject({
       method: 'POST',
       url: '/api/v1/auth/login',
-      payload: { email: 'coord@test.canon', password: 'PasswordCoord123!', organizationId: orgId }
+      payload: { email: 'coord@test.canon', password: COORDINATOR_PASSWORD, organizationId: orgId }
     });
     const coordSessionCookie = extractCookie(coordLoginRes, '__Host-sid');
     const coordCsrfCookie = JSON.parse(coordLoginRes.payload).csrfToken;
@@ -599,7 +627,7 @@ async function runIntegrationTest() {
     console.log('\n--- PRUEBA E2E CICLO COMPLETO TOTP MFA Y RATE LIMIT EXHAUSTION ---');
     const mfaUserEmail = 'mfa.tester@test.canon';
     const mfaUserId = '55555555-5555-5555-5555-555555555555';
-    const mfaPassHash = await hashPassword('PasswordMfa123!');
+    const mfaPassHash = await hashPassword(MFA_USER_PASSWORD);
     
     await dbClientC02.query(`
       INSERT INTO users (id, email, full_name, is_active, mfa_enabled) VALUES ('${mfaUserId}', '${mfaUserEmail}', 'Tester MFA', TRUE, FALSE) ON CONFLICT (id) DO NOTHING;
@@ -613,7 +641,7 @@ async function runIntegrationTest() {
     const mfaLoginRes = await fastifyApp.inject({
       method: 'POST',
       url: '/api/v1/auth/login',
-      payload: { email: mfaUserEmail, password: 'PasswordMfa123!', organizationId: orgId }
+      payload: { email: mfaUserEmail, password: MFA_USER_PASSWORD, organizationId: orgId }
     });
     const mfaSessionCookie = extractCookie(mfaLoginRes, '__Host-sid');
     const mfaCsrfCookie = JSON.parse(mfaLoginRes.payload).csrfToken;
@@ -726,7 +754,7 @@ async function runIntegrationTest() {
         cookie: `__Host-sid=${mfaSessionCookie}; csrf=${mfaCsrfCookie}`,
         'x-csrf-token': mfaCsrfCookie,
       },
-      payload: { password: 'PasswordMfa123!', code: generateTotpCode(setupData.secret) }
+      payload: { password: MFA_USER_PASSWORD, code: generateTotpCode(setupData.secret) }
     });
     if (disableRes.statusCode !== 200) {
       throw new Error(`MFA disable falló: ${disableRes.payload}`);
@@ -735,7 +763,7 @@ async function runIntegrationTest() {
 
     await dbClientC02.end();
 
-    console.log('\n🎉 SUITE DE INTEGRACIÓN FASE 1.1 REMEDIADA (v0.3.30) COMPLETA Y CERTIFICADA (PASS)');
+    console.log('\n🎉 SUITE DE INTEGRACIÓN FASE 1.1 REMEDIADA (v0.4.0-alpha.5) COMPLETA (PASS)');
 
   } finally {
     if (fastifyApp) {
@@ -764,4 +792,3 @@ runIntegrationTest().catch((err) => {
   console.error('\n❌ ERROR FATAL EN PRUEBA DE INTEGRACIÓN PG16:', err.message);
   process.exit(1);
 });
-

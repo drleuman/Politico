@@ -1,18 +1,21 @@
 {
   "name": "politica-canon",
-  "version": "0.3.30",
-  "description": "Monolito Fastify, Identidad, Invitaciones Privadas, Usuarios, Sesiones y RBAC/ABAC — Política Canon v0.3.30 (Fase 1.1 Funcional Remediada Certificada)",
+  "version": "0.4.0-alpha.5",
+  "description": "Monolito Fastify, Identidad, Invitaciones Privadas, Usuarios, Sesiones y RBAC/ABAC — Política Canon v0.4.0-alpha.5",
   "type": "module",
   "main": "dist/server.js",
   "scripts": {
-    "build": "tsc --build",
+    "build": "tsc --build && node -e \"import('fs').then(fs => fs.cpSync('public', 'dist/public', {recursive: true}))\"",
     "start": "node dist/server.js",
     "dev": "tsx watch src/server.ts",
     "typecheck": "tsc --noEmit",
-    "db:bootstrap": "node scripts/bootstrap-pre.mjs && npx drizzle-kit push && node scripts/bootstrap-post.mjs",
-    "db:migrate": "node scripts/migrate-production.mjs",
+    "bootstrap:pre": "node scripts/bootstrap-pre.mjs",
+    "migrate:prod": "node scripts/migrate-production.mjs",
+    "bootstrap:post": "node scripts/bootstrap-post.mjs",
+    "preflight:prod": "node scripts/preflight-production.mjs",
     "email-worker": "node scripts/email-worker.mjs",
-    "test": "npm run build && node scripts/test-integration-pg16.mjs && node validate_v0.3.30.cjs"
+    "test:security": "node scripts/test-security-regressions.mjs",
+    "test": "npm run build && npm run test:security && node scripts/test-integration-pg16.mjs && node validate_v0.4.0-alpha.5.cjs"
   },
   "devDependencies": {
     "@electric-sql/pglite": "^0.5.8",
@@ -20,7 +23,8 @@
     "@types/node": "^20.11.0",
     "@types/nodemailer": "^8.0.2",
     "@types/pg": "^8.23.1",
-    "pg": "^8.23.0",
+    "oxlint": "^1.83.0",
+    "tsx": "^4.20.5",
     "typescript": "^5.3.3"
   },
   "dependencies": {
@@ -30,6 +34,7 @@
     "dotenv": "^17.4.2",
     "fastify": "^5.12.5",
     "ioredis": "^6.0.0",
-    "nodemailer": "10.0.10"
+    "nodemailer": "10.0.10",
+    "pg": "^8.23.0"
   }
 }

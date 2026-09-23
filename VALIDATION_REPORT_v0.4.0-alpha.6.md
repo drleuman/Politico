@@ -1,7 +1,7 @@
 # Informe de validación — v0.4.0-alpha.6
 
 **Fecha:** 2026-09-23
-**Estado:** **EN VALIDACIÓN — NUEVO GATE REQUERIDO**
+**Estado:** **PASS — GATE REAL CERTIFICADO EN GITHUB ACTIONS**
 
 ## Resultados observados
 
@@ -16,9 +16,9 @@
 | `node validate_v0.4.0-alpha.6.cjs` | PASS — 12/12 |
 | `bash -n` scripts de despliegue | PASS |
 | Instalación `npm ci --omit=dev` aislada | PASS — `pg`, Fastify, Redis y Nodemailer resolubles |
-| `npm test` completo | Pendiente de un workflow nuevo sobre el árbol `alpha.6` |
-| PostgreSQL 16 + Redis 7 + Mailpit | Pendiente de un workflow nuevo |
-| Workflow certificado | Pendiente |
+| `npm test` completo | PASS en GitHub Actions, Ubuntu 24.04 / Node.js 22 / Docker real |
+| PostgreSQL 16 + Redis 7 + Mailpit | PASS — integración real y gate fail-closed completo |
+| Workflow certificado | PASS — ejecución `35865843433`, job `107197074972` |
 
 ## Regresiones ejecutables añadidas
 
@@ -31,6 +31,6 @@
 - Los hashes de las migraciones aplicadas `0001`, `0003`, `0004` y `0005` coinciden exactamente con producción.
 - Git conserva sin normalización los bytes CRLF históricos de `0003` y `0004`.
 
-## Gate de promoción
+## Evidencia del gate de promoción
 
-Debe ejecutarse un workflow nuevo sobre el commit final de `alpha.6`. La evidencia de `alpha.5` no se reutiliza porque el árbol y el activador han cambiado.
+El workflow [v0.4.0-alpha.6 integration gate](https://github.com/drleuman/Politico/actions/runs/35865843433) ejecutó `npm ci` y `npm test` sobre el commit `8d3e30eb050ca8378d2a59eab54a1f958143c70b`. El job `107197074972` finalizó con código 0 y acreditó PostgreSQL 16, Redis 7, Mailpit, compilación, regresiones de seguridad y los 12 controles del validador.

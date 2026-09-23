@@ -63,7 +63,7 @@ try {
     fileCount: listFiles(stage).length,
     internalRoot: `${rootName}/`,
     canonicalDatabaseEngine: 'PostgreSQL 16+',
-    dictamen: 'CONDITIONAL (LOCAL PASS; NEW REAL PG16/REDIS7/MAILPIT GATE PENDING)',
+    dictamen: 'PASS (GITHUB ACTIONS REAL PG16/REDIS7/MAILPIT GATE CERTIFIED)',
   };
   fs.writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`, 'utf8');
   console.log(JSON.stringify({ zipPath, manifestPath, ...manifest }, null, 2));

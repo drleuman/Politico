@@ -7,6 +7,7 @@ import { config } from './config/env.js';
 import { checkDatabaseHealth, closeDbPool } from './db/client.js';
 import { checkRedisHealth, closeRedisClient } from './redis/client.js';
 import { registerAuthRoutes } from './auth/routes.js';
+import { registerKnowledgeRoutes } from './knowledge/routes.js';
 import { verifyEmailTransport, isEmailConfigured } from './email/adapter.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -35,6 +36,7 @@ export function buildServer() {
 
   // Registra rutas de autenticación, invitaciones, sesiones y MFA
   server.register(registerAuthRoutes);
+  server.register(registerKnowledgeRoutes);
 
   // GET /healthz — Liveness Probe (HTTP 200 OK without disclosing secrets)
   server.get('/healthz', async (request, reply) => {

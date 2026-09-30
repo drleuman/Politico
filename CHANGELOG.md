@@ -1,3 +1,9 @@
+# Fase 2 — En desarrollo
+
+- Primer catálogo privado de espacios/documentos con contrato READ y RLS transaccional.
+- Pruebas de autorización y rechazo HTTP sin sesión; backlog y ADR-0004 propuesto.
+- Sin migraciones ni despliegue: pendientes UI, paginación e integración PG16/Redis7.
+
 # Registro de Cambios (CHANGELOG) — Política Canon
 
 Todas las modificaciones notables introducidas en este proyecto serán documentadas en este archivo.

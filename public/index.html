@@ -14,6 +14,7 @@
   <script src="/js/confirm-dialog.js"></script>
   <script src="/js/toast.js"></script>
   <script src="/js/empty-state.js"></script>
+  <script src="/js/dashboard.js" defer></script>
 </head>
 <body>
   <!-- B2: Arquitectura de Layout Dinámico por Categoría -->
@@ -28,12 +29,60 @@
 
       <!-- AUD-001: Estructura WAI-ARIA para Pestañas -->
       <div class="nav-tabs" id="navTabs" role="tablist" aria-label="Secciones de la Intranet">
+        <button class="tab-btn" id="tab-dashboard" role="tab" aria-selected="false" aria-controls="dashboardTab" tabindex="-1" onclick="showTab('dashboardTab', event)">Resumen</button>
         <button class="tab-btn active" id="tab-login" role="tab" aria-selected="true" aria-controls="loginTab" tabindex="0" onclick="showTab('loginTab', event)">Inicio de Sesión</button>
         <button class="tab-btn" id="tab-accept" role="tab" aria-selected="false" aria-controls="acceptTab" tabindex="-1" onclick="showTab('acceptTab', event)">Aceptar Invitación</button>
         <button class="tab-btn" id="tab-profile" role="tab" aria-selected="false" aria-controls="profileTab" tabindex="-1" onclick="showTab('profileTab', event)">Mi Perfil</button>
         <button class="tab-btn" id="tab-sessions" role="tab" aria-selected="false" aria-controls="sessionsTab" tabindex="-1" onclick="showTab('sessionsTab', event)">Sesiones Activas</button>
         <button class="tab-btn" id="tab-invitations" role="tab" aria-selected="false" aria-controls="invitationsTab" tabindex="-1" onclick="showTab('invitationsTab', event)">Invitaciones</button>
         <button class="tab-btn" id="tab-users" role="tab" aria-selected="false" aria-controls="usersTab" tabindex="-1" onclick="showTab('usersTab', event)">Usuarios</button>
+      </div>
+
+      <!-- Tab: Dashboard -->
+      <div id="dashboardTab" class="tab-content dashboard-shell" role="tabpanel" tabindex="0" aria-labelledby="tab-dashboard" style="display:none;">
+        <header class="dashboard-header">
+          <div>
+            <p class="dashboard-kicker">Centro de control institucional</p>
+            <h2>Estado general</h2>
+            <p id="dashboardWelcome" class="text-muted">Cargando contexto de organización...</p>
+          </div>
+          <div class="organization-chip" aria-label="Organización activa">
+            <span>Organización</span>
+            <code id="dashboardOrganizationId">Sin identificar</code>
+          </div>
+        </header>
+
+        <section aria-labelledby="systemStatusHeading">
+          <div class="dashboard-section-heading">
+            <div>
+              <h3 id="systemStatusHeading">Disponibilidad del sistema</h3>
+              <p>Comprobaciones operativas en tiempo real.</p>
+            </div>
+            <button type="button" class="btn-secondary dashboard-refresh" id="dashboardRefreshBtn">Actualizar estado</button>
+          </div>
+          <div class="status-strip" id="dashboardStatusStrip" aria-live="polite"></div>
+        </section>
+
+        <section aria-labelledby="metricsHeading">
+          <div class="dashboard-section-heading">
+            <div>
+              <h3 id="metricsHeading">Resumen de identidad</h3>
+              <p>Usuarios, sesiones y controles de acceso de la organización activa.</p>
+            </div>
+          </div>
+          <div class="metric-grid" id="dashboardMetrics" aria-live="polite"></div>
+        </section>
+
+        <div class="dashboard-grid">
+          <section class="dashboard-panel" aria-labelledby="securityHeading">
+            <h3 id="securityHeading">Seguridad de la cuenta</h3>
+            <div id="dashboardSecurity"></div>
+          </section>
+          <section class="dashboard-panel" aria-labelledby="activityHeading">
+            <h3 id="activityHeading">Accesos rápidos</h3>
+            <nav id="dashboardActions" class="dashboard-actions" aria-label="Acciones administrativas"></nav>
+          </section>
+        </div>
       </div>
 
       <!-- AUD-009: Región ARIA Live para Alertas Contextuales -->
@@ -162,7 +211,7 @@
   </div>
 
   <script>
-    let csrfToken = '';
+    let csrfToken = sessionStorage.getItem('politicaCanonCsrfToken') || '';
 
     function showAlert(msg, isError = false) {
       const box = document.getElementById('alertBox');
@@ -222,6 +271,8 @@
           mainContainer.classList.add('layout-auth');
         } else if (tabId === 'profileTab') {
           mainContainer.classList.add('layout-content');
+        } else if (tabId === 'dashboardTab') {
+          mainContainer.classList.add('layout-data-heavy');
         } else if (tabId === 'invitationsTab') {
           mainContainer.classList.add('layout-admin');
         } else if (tabId === 'sessionsTab' || tabId === 'usersTab') {
@@ -233,6 +284,7 @@
       if (tabId === 'invitationsTab') loadInvitations();
       if (tabId === 'usersTab') loadUsers();
       if (tabId === 'profileTab') loadProfile();
+      if (tabId === 'dashboardTab' && typeof window.loadDashboard === 'function') window.loadDashboard();
     }
 
     // AUD-001: Navegación por Teclado (Flechas Izquierda / Derecha, Home, End)
@@ -285,8 +337,9 @@
         if (!res.ok) throw new Error(data.error || 'Error al iniciar sesión');
         
         csrfToken = data.csrfToken;
+        sessionStorage.setItem('politicaCanonCsrfToken', csrfToken);
         showAlert('Sesión iniciada correctamente para: ' + data.user.email);
-        showTab('profileTab');
+        showTab('dashboardTab');
       } catch (err) {
         showAlert(err.message, true);
       } finally {
@@ -352,11 +405,144 @@
         appendField('MFA activado', user.mfaEnabled ? 'Sí' : 'No');
         appendField('Organización activa', data.session?.organizationId || 'Sin organización');
         container.appendChild(profile);
+        renderMfaControls(container, Boolean(user.mfaEnabled));
       } catch (err) {
         const message = document.createElement('p');
         message.className = 'text-danger';
         message.textContent = 'No se pudo cargar el perfil. Inténtalo de nuevo.';
         container.appendChild(message);
+      }
+    }
+
+    function renderMfaControls(container, mfaEnabled) {
+      const section = document.createElement('section');
+      section.className = 'mfa-controls';
+
+      const heading = document.createElement('h3');
+      heading.textContent = mfaEnabled ? 'Verificación MFA' : 'Activar autenticación MFA';
+      section.appendChild(heading);
+
+      const description = document.createElement('p');
+      description.className = 'text-muted';
+      description.textContent = mfaEnabled
+        ? 'Introduce el código actual de tu aplicación autenticadora para habilitar durante 15 minutos las operaciones sensibles.'
+        : 'Vincula una aplicación TOTP para proteger la gestión de usuarios e invitaciones.';
+      section.appendChild(description);
+
+      if (!mfaEnabled) {
+        const startButton = document.createElement('button');
+        startButton.type = 'button';
+        startButton.className = 'btn-primary';
+        startButton.textContent = 'Configurar MFA';
+        startButton.addEventListener('click', () => handleMfaSetup(startButton, section));
+        section.appendChild(startButton);
+      } else {
+        appendMfaCodeForm(section, handleMfaVerify, 'Verificar MFA');
+      }
+
+      container.appendChild(section);
+    }
+
+    async function handleMfaSetup(button, section) {
+      hideAlert();
+      setButtonLoading(button, true, 'Preparando MFA...');
+      try {
+        const res = await fetch('/api/v1/auth/mfa/setup', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'x-csrf-token': csrfToken },
+          body: '{}'
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'No se pudo iniciar la configuración MFA.');
+
+        button.remove();
+        const instructions = document.createElement('p');
+        instructions.textContent = 'En tu aplicación autenticadora, añade una cuenta manual con esta clave TOTP:';
+        section.appendChild(instructions);
+
+        const secret = document.createElement('code');
+        secret.textContent = data.secret;
+        secret.setAttribute('aria-label', 'Clave secreta TOTP');
+        section.appendChild(secret);
+
+        const warning = document.createElement('p');
+        warning.className = 'text-muted';
+        warning.textContent = 'No compartas ni guardes esta clave fuera de tu aplicación autenticadora.';
+        section.appendChild(warning);
+        appendMfaCodeForm(section, handleMfaConfirm, 'Activar MFA');
+      } catch (err) {
+        showAlert(err.message, true);
+        setButtonLoading(button, false);
+      }
+    }
+
+    function appendMfaCodeForm(container, handler, buttonText) {
+      const form = document.createElement('form');
+      form.className = 'mfa-code-form';
+      form.addEventListener('submit', (event) => handler(event, form));
+
+      const group = document.createElement('div');
+      group.className = 'form-group';
+      const label = document.createElement('label');
+      label.textContent = 'Código de seis dígitos';
+      const input = document.createElement('input');
+      input.type = 'text';
+      input.inputMode = 'numeric';
+      input.autocomplete = 'one-time-code';
+      input.pattern = '[0-9]{6}';
+      input.maxLength = 6;
+      input.required = true;
+      label.appendChild(input);
+      group.appendChild(label);
+
+      const submit = document.createElement('button');
+      submit.type = 'submit';
+      submit.className = 'btn-primary';
+      submit.textContent = buttonText;
+      form.append(group, submit);
+      container.appendChild(form);
+    }
+
+    async function submitMfaCode(endpoint, form, loadingText) {
+      const submit = form.querySelector('button[type="submit"]');
+      const code = form.querySelector('input').value.trim();
+      setButtonLoading(submit, true, loadingText);
+      try {
+        const res = await fetch(endpoint, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'x-csrf-token': csrfToken },
+          body: JSON.stringify({ code })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'No se pudo verificar el código MFA.');
+        return data;
+      } finally {
+        setButtonLoading(submit, false);
+      }
+    }
+
+    async function handleMfaConfirm(event, form) {
+      event.preventDefault();
+      hideAlert();
+      try {
+        const data = await submitMfaCode('/api/v1/auth/mfa/confirm', form, 'Activando MFA...');
+        const codes = Array.isArray(data.backupCodes) ? data.backupCodes.join('\n') : '';
+        showAlert('MFA activado correctamente. Guarda ahora tus códigos de respaldo.');
+        if (codes) window.prompt('Códigos de respaldo (guárdalos en un lugar seguro):', codes);
+        await loadProfile();
+      } catch (err) {
+        showAlert(err.message, true);
+      }
+    }
+
+    async function handleMfaVerify(event, form) {
+      event.preventDefault();
+      hideAlert();
+      try {
+        await submitMfaCode('/api/v1/auth/mfa/verify', form, 'Verificando MFA...');
+        showAlert('MFA verificado. Las operaciones sensibles están habilitadas durante 15 minutos.');
+      } catch (err) {
+        showAlert(err.message, true);
       }
     }
 
@@ -485,6 +671,8 @@
       try {
         const res = await fetch('/api/v1/invitations');
         if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          if (String(data.error || '').startsWith('MFA_REQUIRED')) throw new Error('mfa-required');
           if (res.status === 401 || res.status === 403) throw new Error('permission');
           throw new Error('server');
         }
@@ -533,10 +721,11 @@
         // M-C03: Estado diferenciado — permission vs error vs empty
         if (typeof renderErrorState === 'function') {
           const isPermission = err.message === 'permission';
+          const isMfaRequired = err.message === 'mfa-required';
           renderErrorState(tbody, {
-            title: isPermission ? 'No tienes permisos para consultar las invitaciones' : 'No se pudieron cargar las invitaciones',
-            description: isPermission ? 'Inicia sesión o contacta al administrador para obtener acceso.' : 'Error al conectar con el servidor. Inténtalo de nuevo.',
-            icon: isPermission ? '🔒' : '⚠',
+            title: isMfaRequired ? 'Debes verificar MFA' : (isPermission ? 'No tienes permisos para consultar las invitaciones' : 'No se pudieron cargar las invitaciones'),
+            description: isMfaRequired ? 'Activa o verifica MFA desde Mi Perfil. La autorización dura 15 minutos.' : (isPermission ? 'Inicia sesión o contacta al administrador para obtener acceso.' : 'Error al conectar con el servidor. Inténtalo de nuevo.'),
+            icon: (isPermission || isMfaRequired) ? '🔒' : '⚠',
             colspan: 4
           });
         }
